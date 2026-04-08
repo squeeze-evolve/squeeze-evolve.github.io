@@ -1,0 +1,37 @@
+<h1>Registry Pattern</h1>
+
+<p>All operators are managed through a generic <code>Registry[T]</code> class.</p>
+
+<h2>API</h2>
+<table>
+  <tr><th>Method</th><th>Description</th></tr>
+  <tr><td><code>register(key)</code></td><td>Decorator that registers a function under <code>key</code></td></tr>
+  <tr><td><code>get(key)</code></td><td>Returns the registered function, or raises <code>KeyError</code></td></tr>
+  <tr><td><code>keys()</code></td><td>Lists all registered names</td></tr>
+  <tr><td><code>key in registry</code></td><td>Checks if a key exists</td></tr>
+</table>
+
+<h2>How it works</h2>
+<pre><code class="language-python">from squeeze_evolve.core.registry import Registry
+
+# Each operator family gets its own instance
+fitness: Registry[Callable] = Registry("fitness")
+
+# Operators self-register at import time
+@fitness.register("confidence")
+def group_confidence(scores):
+    return float(np.mean(scores))</code></pre>
+
+<p>The orchestrator resolves config strings at init:</p>
+<pre><code class="language-python">self._fitness_fn = fitness.get(cfg.routing.fitness)
+# "confidence" → group_confidence</code></pre>
+
+<p>Unknown keys produce a clear error:</p>
+<pre><code>KeyError: Unknown fitness operator: 'foo'. Available: confidence, diversity</code></pre>
+
+<h2>Design rationale</h2>
+<ul>
+  <li>No metaclass magic. Explicit decorator registration.</li>
+  <li>No auto-discovery. Modules must be imported (<code>--include-path</code> provides opt-in discovery).</li>
+  <li>Duplicate keys raise immediately.</li>
+</ul>

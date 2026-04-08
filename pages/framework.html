@@ -1,0 +1,282 @@
+<h1>Using the Framework</h1>
+<p>How the operator system works, how to register custom operators, and how to build complete custom pipelines.</p>
+
+<h2>The operator lifecycle</h2>
+
+<p>When the orchestrator starts, it reads your config and resolves every operator name to a function:</p>
+
+<pre><code class="language-python"># Inside RoutingOrchestrator.__init__()
+self._fitness_fn   = fitness.get(cfg.routing.fitness)        # "confidence" → group_confidence()
+self._select_fn    = selection.get(cfg.routing.selection)     # "uniform"    → select_uniform()
+self._update_fn    = update.get(cfg.routing.update)           # "replace"    → update_replace()
+self._lite_agg_fn  = lite_agg.get(cfg.routing.lite_method)    # "majority"   → lite_aggregate_majority()
+self._recomb_fn    = recombination.get(cfg.routing.recombination)  # "aggregate" → aggregate_prompt()
+self._eval_fn      = evaluation.get(cfg.routing.evaluation)   # "none"       → eval_none()</code></pre>
+
+<p>Then during each evolution loop, the orchestrator calls them in this order:</p>
+
+<pre><code>for each problem:
+    1. _select_fn(candidates, k, groups, scores=...) → groups, indices
+    2. _fitness_fn(scores_per_group)                  → group fitness (one float per group)
+    3. compute_thresholds(fitnesses, percentiles)     → thresholds
+    4. assign_routes(fitnesses, thresholds, n_models)  → route per group
+    5. _recomb_fn(query, group_candidates)            → prompt string (sent to assigned model)
+    ... model generates responses ...
+    6. _update_fn(old_population, new_candidates)      → next population
+    7. _eval_fn(candidates, ground_truth)              → metrics dict</code></pre>
+
+<p>Every one of these steps is a registered operator you can replace.</p>
+
+<h2>How registration works</h2>
+
+<p>Each operator family has a global <code>Registry</code> instance defined in <code>operators.py</code>:</p>
+
+<pre><code class="language-python">from squeeze_evolve.core.registry import Registry
+
+fitness:       Registry[Callable] = Registry("fitness")
+selection:     Registry[Callable] = Registry("selection")
+lite_agg:      Registry[Callable] = Registry("lite_agg")
+update:        Registry[Callable] = Registry("update")
+recombination: Registry[Callable] = Registry("recombination")
+evaluation:    Registry[Callable] = Registry("evaluation")
+configs:       Registry[Callable] = Registry("configs")</code></pre>
+
+<p>Built-in operators register themselves at import time:</p>
+
+<pre><code class="language-python">@fitness.register("confidence")
+def group_confidence(scores):
+    return float(np.mean(scores))</code></pre>
+
+<p>Your custom operators work the same way. Import the registry, decorate your function, and the name you pass to <code>register()</code> becomes the string you use in YAML.</p>
+
+<h2>Writing a custom fitness function</h2>
+
+<p>A fitness function takes per-candidate scores for a group and returns a single float. Higher means easier/more confident.</p>
+
+<pre><code class="language-python">import numpy as np
+from squeeze_evolve import fitness
+
+@fitness.register("min_confidence")
+def min_confidence(scores, **kwargs):
+    """Use the worst candidate's confidence as the group signal.
+    Groups where even one candidate is uncertain get the expensive model."""
+    return float(np.min(scores))</code></pre>
+
+<pre><code class="language-yaml">routing:
+  fitness: min_confidence</code></pre>
+
+<div class="callout note">
+  <strong>Always accept **kwargs</strong>
+  The orchestrator passes context like <code>task</code> and <code>temperature</code> through kwargs. Your function must accept them even if it doesn't use them.
+</div>
+
+<h2>Writing a custom selection function</h2>
+
+<p>A selection function receives the full candidate list, group size <code>k</code>, group count <code>m</code>, and keyword args including <code>scores</code>. It returns two parallel lists: string groups and index groups.</p>
+
+<pre><code class="language-python">import random
+from squeeze_evolve import selection
+
+@selection.register("tournament")
+def tournament_select(candidates, k, m, **kwargs):
+    """Tournament selection: sample 2k candidates, keep the top-k by fitness."""
+    scores = kwargs["scores"]
+    groups, indices = [], []
+    for _ in range(m):
+        pool = random.sample(range(len(candidates)), min(k * 2, len(candidates)))
+        winners = sorted(pool, key=lambda i: scores[i], reverse=True)[:k]
+        indices.append(winners)
+        groups.append([candidates[i] for i in winners])
+    return groups, indices</code></pre>
+
+<pre><code class="language-yaml">routing:
+  selection: tournament</code></pre>
+
+<h2>Writing a custom evaluation function</h2>
+
+<p>An evaluation function receives the candidate list and ground truth, and returns a dict of metrics. Numeric values are automatically averaged across problems and appear as <code>eval_&lt;key&gt;</code> in the output.</p>
+
+<pre><code class="language-python">import re
+from collections import Counter
+from squeeze_evolve import evaluation
+
+@evaluation.register("math_boxed")
+def math_boxed_eval(candidates, gt, **kwargs):
+    """Extract \\boxed{} answers and compare to ground truth."""
+    def extract_boxed(text):
+        match = re.findall(r'\\boxed\{([^}]*)\}', text)
+        return match[-1].strip() if match else ""
+
+    answers = [extract_boxed(c) for c in candidates]
+    correct = [a == str(gt).strip() for a in answers]
+    majority = Counter(answers).most_common(1)[0][0] if answers else ""
+
+    return {
+        "mean_acc": sum(correct) / max(len(correct), 1),
+        "pass_at_k": float(any(correct)),
+        "majority_vote": float(majority == str(gt).strip()),
+    }</code></pre>
+
+<pre><code class="language-yaml">routing:
+  evaluation: math_boxed</code></pre>
+
+<h2>Writing a custom recombination prompt</h2>
+
+<p>A recombination function builds the prompt that gets sent to the assigned model. It receives the original query and the group's candidates.</p>
+
+<pre><code class="language-python">from squeeze_evolve import recombination
+
+@recombination.register("debate")
+def debate_prompt(query, candidates, **kwargs):
+    """Frame recombination as a debate between candidates."""
+    if not candidates:
+        return query
+
+    parts = [f"Problem: {query}\n"]
+    parts.append("The following solutions have been proposed:\n")
+    for i, c in enumerate(candidates, 1):
+        parts.append(f"Debater {i}: {c.strip()}\n")
+    parts.append(
+        "You are the judge. Evaluate each debater's reasoning, "
+        "identify errors, and produce the correct final answer. "
+        "End with the result in \\boxed{}."
+    )
+    return "\n".join(parts)</code></pre>
+
+<pre><code class="language-yaml">routing:
+  recombination: debate</code></pre>
+
+<h2>Writing a custom update function</h2>
+
+<p>An update function decides how new candidates merge with the existing population.</p>
+
+<pre><code class="language-python">from squeeze_evolve import update
+
+@update.register("keep_unique")
+def keep_unique(old, new, **kwargs):
+    """Accumulate but deduplicate."""
+    seen = set()
+    result = []
+    for c in old + new:
+        key = c.strip()
+        if key not in seen:
+            seen.add(key)
+            result.append(c)
+    return result</code></pre>
+
+<h2>Combining custom operators</h2>
+
+<p>Put everything in a single Python file:</p>
+
+<pre><code class="language-python"># custom_ops.py
+import numpy as np
+import re
+import random
+from collections import Counter
+from squeeze_evolve import fitness, selection, evaluation, recombination
+
+@fitness.register("min_confidence")
+def min_confidence(scores, **kwargs):
+    return float(np.min(scores))
+
+@selection.register("tournament")
+def tournament_select(candidates, k, m, **kwargs):
+    scores = kwargs["scores"]
+    groups, indices = [], []
+    for _ in range(m):
+        pool = random.sample(range(len(candidates)), min(k * 2, len(candidates)))
+        winners = sorted(pool, key=lambda i: scores[i], reverse=True)[:k]
+        indices.append(winners)
+        groups.append([candidates[i] for i in winners])
+    return groups, indices
+
+@evaluation.register("math_boxed")
+def math_boxed_eval(candidates, gt, **kwargs):
+    def extract(text):
+        m = re.findall(r'\\boxed\{([^}]*)\}', text)
+        return m[-1].strip() if m else ""
+    answers = [extract(c) for c in candidates]
+    correct = [a == str(gt).strip() for a in answers]
+    majority = Counter(answers).most_common(1)[0][0] if answers else ""
+    return {
+        "mean_acc": sum(correct) / max(len(correct), 1),
+        "pass_at_k": float(any(correct)),
+        "majority_vote": float(majority == str(gt).strip()),
+    }
+
+@recombination.register("debate")
+def debate_prompt(query, candidates, **kwargs):
+    if not candidates:
+        return query
+    parts = [f"Problem: {query}\n"]
+    for i, c in enumerate(candidates, 1):
+        parts.append(f"Debater {i}: {c.strip()}\n")
+    parts.append("Judge: produce the correct answer in \\boxed{}.")
+    return "\n".join(parts)</code></pre>
+
+<p>Then use them together:</p>
+<pre><code class="language-yaml">routing:
+  fitness: min_confidence
+  selection: tournament
+  evaluation: math_boxed
+  recombination: debate
+  update: replace
+  task: math</code></pre>
+
+<pre><code class="language-bash">squeeze-evolve-client \
+  --config my_run.yaml \
+  --include-path ./ \
+  --input data/aime25/test.parquet</code></pre>
+
+<p>The <code>--include-path ./</code> flag tells the CLI to execute all <code>.py</code> files in the current directory at startup, which triggers all the <code>@register</code> decorators before the orchestrator resolves config strings.</p>
+
+<h2>Python config presets</h2>
+
+<p>Instead of YAML, you can define configs as Python functions and register them:</p>
+
+<pre><code class="language-python"># presets/fast_math.py
+from squeeze_evolve import configs
+from squeeze_evolve.core.config import RunConfig, RoutingConfig, ModelConfig
+
+@configs.register("fast_math")
+def fast_math():
+    return RunConfig(
+        run_name="fast_math",
+        routing=RoutingConfig(
+            k=2, population=8, loops=3,
+            fitness="confidence", selection="uniform",
+            update="replace", recombination="aggregate",
+            task="math",
+        ),
+        models=[
+            ModelConfig(name="cheap", base_url="http://localhost:8001/v1",
+                        temperature=0.7, top_p=0.8),
+            ModelConfig(name="expensive", base_url="http://localhost:8000/v1",
+                        temperature=0.7, top_p=0.8),
+        ],
+        scoring_model=ModelConfig(
+            name="cheap", base_url="http://localhost:8001/v1",
+            prompt_logprobs=True, vllm_extensions=True,
+        ),
+    )</code></pre>
+
+<pre><code class="language-bash">squeeze-evolve-client --config fast_math --include-path presets/ --input data/aime25/test.parquet</code></pre>
+
+<h2>Using the orchestrator directly</h2>
+
+<p>For programmatic use, skip the CLI and call the orchestrator from Python:</p>
+
+<pre><code class="language-python">import asyncio
+from squeeze_evolve.algorithm.orchestrator import RoutingOrchestrator, load_run_config
+from squeeze_evolve.core.data import load_dataset
+
+cfg = load_run_config("my_run.yaml")
+problems = load_dataset("data/aime25/test.parquet", n_problems=5)
+
+def on_loop(metrics):
+    print(f"Loop {metrics.loop}: {metrics.confidence.mean_confidence:.4f} mean conf")
+
+result = asyncio.run(RoutingOrchestrator(cfg).run(problems, on_loop_complete=on_loop))
+print(f"Done. {len(result['metrics'])} loops completed.")</code></pre>
+
+<p>The <code>on_loop_complete</code> callback fires after each loop with a <code>LoopMetrics</code> object, useful for live monitoring or early stopping logic.</p>

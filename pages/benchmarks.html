@@ -1,0 +1,82 @@
+<h1>Benchmarks</h1>
+
+<table>
+  <tr><th>Benchmark</th><th>Problems</th><th>Task</th><th>Answer format</th></tr>
+  <tr><td><code>aime25/</code></td><td>30</td><td>math</td><td>Integer in \boxed{}</td></tr>
+  <tr><td><code>hmmt25/</code></td><td>30</td><td>math</td><td>Numerical in \boxed{}</td></tr>
+  <tr><td><code>gpqa_diamond/</code></td><td>198</td><td>gpqa_diamond</td><td>Letter in \boxed{}</td></tr>
+</table>
+
+<h2>Shared settings</h2>
+<table>
+  <tr><th>Parameter</th><th>Value</th></tr>
+  <tr><td>Population (N)</td><td>16</td></tr>
+  <tr><td>Group size (K)</td><td>4</td></tr>
+  <tr><td>Loops (T)</td><td>10</td></tr>
+  <tr><td>Seeds</td><td>4 (averaged)</td></tr>
+  <tr><td>Selection</td><td>Uniform</td></tr>
+  <tr><td>Update</td><td>Replace</td></tr>
+  <tr><td>Fitness</td><td>Group Confidence</td></tr>
+</table>
+
+<h2>Model pairs</h2>
+
+<h3>Homogeneous</h3>
+<table>
+  <tr><th>Config</th><th>Model 0 (cheap)</th><th>Model 1 (expensive)</th></tr>
+  <tr><td><code>qwen3-30b-inst_30b-think</code></td><td>Qwen3-30B-A3B-Instruct</td><td>Qwen3-30B-A3B-Thinking</td></tr>
+  <tr><td><code>qwen3-30b_235b</code></td><td>Qwen3-30B-A3B-Instruct</td><td>Qwen3-235B-A22B-Instruct</td></tr>
+  <tr><td><code>gpt-oss-20b_120b</code></td><td>GPT-OSS-20B</td><td>GPT-OSS-120B</td></tr>
+</table>
+
+<h3>Heterogeneous</h3>
+<table>
+  <tr><th>Config</th><th>Model 0 (cheap)</th><th>Model 1 (expensive)</th></tr>
+  <tr><td><code>qwen3-30b_gpt5mini</code></td><td>Qwen3-30B-A3B-Instruct</td><td>GPT-5 mini</td></tr>
+  <tr><td><code>gpt-oss-20b_gpt5mini</code></td><td>GPT-OSS-20B</td><td>GPT-5 mini</td></tr>
+</table>
+
+<h2>Running benchmarks</h2>
+
+<h3>Single config</h3>
+<pre><code class="language-bash">squeeze-evolve-client \
+  --config benchmarks/aime25/qwen3-30b_235b.yaml \
+  --input data/aime25/test.parquet \
+  --output results/aime25_qwen3-30b_235b.json</code></pre>
+
+<h3>Full suite</h3>
+<pre><code class="language-bash">bash scripts/run_aime25.sh
+bash scripts/run_hmmt25.sh
+bash scripts/run_gpqa_diamond.sh</code></pre>
+
+<p>Each script loops over all configs with 4 seeds (1234, 2345, 3456, 4567) and skips existing results.</p>
+
+<h3>Output</h3>
+<pre><code>results/
+  aime25/
+    qwen3-30b_235b_seed1234.json
+    qwen3-30b_235b_seed2345.json
+    ...</code></pre>
+
+<p>Models must be served at the <code>base_url</code> endpoints in each YAML config before running.</p>
+
+<h2>Datasets</h2>
+
+<table>
+  <tr><th>Dataset</th><th>Problems</th><th>Task</th></tr>
+  <tr><td><code>aime25/test.parquet</code></td><td>30</td><td>math</td></tr>
+  <tr><td><code>hmmt25/test.parquet</code></td><td>30</td><td>math</td></tr>
+  <tr><td><code>gpqa_diamond/test.parquet</code></td><td>198</td><td>gpqa_diamond</td></tr>
+  <tr><td><code>rg_cognition/test.parquet</code></td><td>100</td><td>rg</td></tr>
+  <tr><td><code>rg_games/test.parquet</code></td><td>100</td><td>rg</td></tr>
+  <tr><td><code>supergpqa/supergpqa_test_{1-5}.parquet</code></td><td>200 each</td><td>gpqa_diamond</td></tr>
+</table>
+
+<p><code>load_dataset()</code> accepts <code>.parquet</code>, <code>.jsonl</code>, and <code>.json</code> files.</p>
+
+<h3>Custom datasets</h3>
+<pre><code class="language-json">[
+  {"orig_prompt": "Solve for x: 2x + 3 = 7", "gt": "2"},
+  {"orig_prompt": "What is the capital of France?", "gt": "Paris"}
+]</code></pre>
+<p>Each object needs <code>orig_prompt</code>. The <code>gt</code> field is optional (only needed for evaluation).</p>

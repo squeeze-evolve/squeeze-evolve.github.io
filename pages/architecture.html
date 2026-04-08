@@ -1,0 +1,67 @@
+<h1>Architecture</h1>
+
+<pre><code>src/squeeze_evolve/
+  __init__.py              Re-exports operator registries
+  core/
+    config.py              Pydantic config schema
+    backend.py             Async OpenAI-compatible backend
+    data.py                Dataset loading
+    storage.py             Local / S3 / GCS storage
+    registry.py            Decorator-based operator registry
+  algorithm/
+    operators.py           Fitness, selection, routing, recombination, eval, update
+    orchestrator.py        Algorithm 1 loop, metrics, checkpointing
+  api/
+    cli.py                 CLI entrypoints
+    server.py              FastAPI server</code></pre>
+
+<h2>Design</h2>
+<ul>
+  <li><strong>Async-first.</strong> All model tiers execute in parallel via <code>asyncio.gather()</code>.</li>
+  <li><strong>No vLLM dependency.</strong> Communicates through the OpenAI chat/completions API only.</li>
+  <li><strong>Pydantic config.</strong> Type-safe parsing with automatic validation.</li>
+  <li><strong>Registry pattern.</strong> All operators are plain functions registered by name.</li>
+  <li><strong>Pluggable storage.</strong> Auto-detected from path prefix.</li>
+</ul>
+
+<h2>Data flow</h2>
+<pre><code>CLI / Server
+  → load_run_config(yaml) → RunConfig
+  → load_dataset(parquet) → [{orig_prompt, gt}]
+  → RoutingOrchestrator(RunConfig)
+      ├─ Loop 0: backends[-1].generate_batched()
+      └─ Loop t:
+          ├─ score_population() → candidate_scores
+          ├─ selection() → groups
+          ├─ fitness() → group fitnesses
+          ├─ compute_thresholds() + assign_routes()
+          ├─ asyncio.gather(tier_0, tier_1, ..., lite)
+          ├─ merge → update population
+          └─ save checkpoint + emit metrics</code></pre>
+
+<h2>Dependencies</h2>
+<table>
+  <tr><th>Package</th><th>Purpose</th></tr>
+  <tr><td><code>openai</code></td><td>Async API client</td></tr>
+  <tr><td><code>pydantic</code></td><td>Config schema</td></tr>
+  <tr><td><code>numpy</code></td><td>Percentile computation</td></tr>
+  <tr><td><code>pandas</code> / <code>pyarrow</code></td><td>Parquet loading</td></tr>
+  <tr><td><code>fastapi</code> / <code>uvicorn</code></td><td>HTTP server</td></tr>
+</table>
+
+<h2>Testing</h2>
+
+<pre><code class="language-bash">uv run pytest tests/ -v</code></pre>
+
+<table>
+  <tr><th>File</th><th>Coverage</th></tr>
+  <tr><td><code>test_config.py</code></td><td>Config schema, model validation, scoring policy, YAML/Python loading</td></tr>
+  <tr><td><code>test_operators.py</code></td><td>All operator registries, N-model routing, selection, prompts, eval</td></tr>
+  <tr><td><code>test_metrics.py</code></td><td>Token/routing metrics, flat dict serialization, eval aggregation</td></tr>
+  <tr><td><code>test_backend.py</code></td><td>Retry policy, batched generation</td></tr>
+  <tr><td><code>test_data.py</code></td><td>Parquet/JSON loading, dataset listing</td></tr>
+  <tr><td><code>test_server.py</code></td><td>Health endpoint</td></tr>
+  <tr><td><code>test_storage.py</code></td><td>Local/S3/GCS storage</td></tr>
+</table>
+
+<p>Tests use <code>pytest-asyncio</code> with <code>asyncio_mode = "auto"</code>.</p>

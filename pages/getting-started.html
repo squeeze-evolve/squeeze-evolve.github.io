@@ -1,0 +1,226 @@
+<h1>Getting Started</h1>
+<p>Install Squeeze Evolve, serve your models, run your first evolutionary loop, and understand the output.</p>
+
+<h2>Install</h2>
+
+<p>Requirements: Python 3.10+, <a href="https://docs.astral.sh/uv/" target="_blank">uv</a> (recommended) or pip, Git.</p>
+
+<pre><code class="language-bash">git clone --recurse-submodules git@github.com:Nietzsche2000/squeeze-evolve.git
+cd squeeze-evolve
+
+# Recommended
+uv sync --dev
+
+# Or with pip
+pip install -e ".[dev]"</code></pre>
+
+<h3>Optional: forked vLLM</h3>
+<p>The <code>external/vllm/</code> submodule contains a forked vLLM with a custom prefill path that computes confidence scores directly on GPU (4-10x lower scoring latency).</p>
+<pre><code class="language-bash">VLLM_USE_PRECOMPILED=1 uv pip install --editable external/vllm</code></pre>
+
+<h3>Optional: cloud storage</h3>
+<pre><code class="language-bash"># Amazon S3
+uv sync --dev --extra aws
+
+# Google Cloud Storage
+uv sync --dev --extra gcs</code></pre>
+
+<p>Verify the install:</p>
+<pre><code class="language-bash">squeeze-evolve-client --help</code></pre>
+
+<h2>Serve your models</h2>
+
+<p>Squeeze Evolve talks to models over the OpenAI-compatible API. You need at least one running server. Here we set up two tiers with vLLM:</p>
+
+<pre><code class="language-bash"># Cheap model (model_0)
+vllm serve Qwen/Qwen3-30B-A3B-Instruct-2507 \
+  --port 8001 \
+  --tensor-parallel-size 4 \
+  --enable-prefix-caching
+
+# Expensive model (model_1)
+vllm serve Qwen/Qwen3-235B-A22B-Instruct-2507 \
+  --port 8000 \
+  --tensor-parallel-size 8 \
+  --enable-prefix-caching</code></pre>
+
+<p>Verify both are healthy:</p>
+<pre><code class="language-bash">curl http://localhost:8001/v1/models
+curl http://localhost:8000/v1/models</code></pre>
+
+<div class="callout tip">
+  <strong>Tip</strong>
+  You can use any OpenAI-compatible server: vLLM, SGLang, TGI, or cloud APIs like OpenAI/Together/OpenRouter. Just update the <code>base_url</code> and <code>api_key</code> in your config.
+</div>
+
+<h2>Write a config</h2>
+
+<p>Create <code>my_run.yaml</code>:</p>
+
+<pre><code class="language-yaml">run_name: my_first_run
+
+routing:
+  k: 4              # group size
+  population: 16    # candidates per problem in loop 0
+  loops: 5          # total iterations
+  confidence_percentiles: [50.0]
+  fitness: confidence
+  selection: uniform
+  update: replace
+  recombination: aggregate
+  task: math
+  seed: 1234
+
+models:
+  - name: Qwen/Qwen3-30B-A3B-Instruct-2507
+    base_url: http://localhost:8001/v1
+    max_tokens: 8192
+    temperature: 0.7
+    top_p: 0.8
+
+  - name: Qwen/Qwen3-235B-A22B-Instruct-2507
+    base_url: http://localhost:8000/v1
+    max_tokens: 8192
+    temperature: 0.7
+    top_p: 0.8
+
+scoring_model:
+  name: Qwen/Qwen3-30B-A3B-Instruct-2507
+  base_url: http://localhost:8001/v1
+  prompt_logprobs: true
+  vllm_extensions: true
+
+checkpoint_dir: ./artifacts/checkpoints
+metrics_path: ./artifacts/metrics.json</code></pre>
+
+<p>What this does:</p>
+<ul>
+  <li><strong>Loop 0:</strong> The 235B model generates 16 candidates per problem</li>
+  <li><strong>Loops 1-4:</strong> Candidates are grouped into subsets of 4, scored by confidence, and routed: low-confidence groups go to 235B, high-confidence groups go to 30B</li>
+  <li>The 50th percentile threshold means roughly half the groups go to each model per problem</li>
+</ul>
+
+<h2>Run it</h2>
+
+<pre><code class="language-bash"># Run on 5 problems, print results to stdout
+squeeze-evolve-client \
+  --config my_run.yaml \
+  --input data/aime25/test.parquet \
+  --n-problems 5
+
+# Or save to a file
+squeeze-evolve-client \
+  --config my_run.yaml \
+  --input data/aime25/test.parquet \
+  --n-problems 5 \
+  --output results.json</code></pre>
+
+<p>You'll see log output like this as it runs:</p>
+<pre><code>INFO - Starting run my_first_run_a3f7b2c1: 5 problems, 5 loops
+INFO - Loop 0: generating 80 candidates (5 problems x 16 population)
+INFO - Loop 0: done in 45.2s, 12340 input tokens, 89012 output tokens
+INFO - Loop 1: M0=40 M1=40 Lite=0, scoring=3.2s gen=18.5s total=21.8s
+INFO - Loop 2: M0=42 M1=38 Lite=0, scoring=3.1s gen=17.9s total=21.1s
+...</code></pre>
+
+<h2>Understand the output</h2>
+
+<p>The output JSON has three top-level keys:</p>
+
+<pre><code class="language-json">{
+  "run_id": "my_first_run_a3f7b2c1",
+  "metrics": [ ... ],
+  "problems": [ ... ]
+}</code></pre>
+
+<h3>metrics</h3>
+<p>One entry per loop:</p>
+<table>
+  <tr><th>Field</th><th>Meaning</th></tr>
+  <tr><td><code>loop</code></td><td>Loop index (0 = init)</td></tr>
+  <tr><td><code>model_0_count</code></td><td>Groups sent to cheap model</td></tr>
+  <tr><td><code>model_1_count</code></td><td>Groups sent to expensive model</td></tr>
+  <tr><td><code>lite_count</code></td><td>Groups handled by lite agg</td></tr>
+  <tr><td><code>total_input_tokens</code></td><td>Total prompt tokens across all models</td></tr>
+  <tr><td><code>total_output_tokens</code></td><td>Total completion tokens</td></tr>
+  <tr><td><code>time_scoring_s</code></td><td>Time spent on confidence scoring</td></tr>
+  <tr><td><code>time_generation_s</code></td><td>Time spent on model generation</td></tr>
+  <tr><td><code>mean_confidence</code></td><td>Average confidence across all candidates</td></tr>
+  <tr><td><code>eval_mean_acc</code></td><td>Accuracy (if evaluation is enabled)</td></tr>
+</table>
+
+<h3>problems</h3>
+<p>Final state of each problem after all loops:</p>
+<pre><code class="language-json">{
+  "orig_prompt": "Find the sum of all positive integers n...",
+  "gt": "42",
+  "candidates": [
+    "The answer is 42. Here's why...",
+    "After careful analysis, we get 42...",
+    "..."
+  ],
+  "routing_details": {
+    "routes": ["model_0", "model_1", "model_0", ...],
+    "thresholds": [0.847]
+  }
+}</code></pre>
+
+<h2>Checkpoints</h2>
+
+<p>A checkpoint is saved after every loop at <code>checkpoint_dir</code>:</p>
+<pre><code class="language-bash">ls artifacts/checkpoints/
+# my_first_run_loop0.json
+# my_first_run_loop1.json
+# ...
+# my_first_run_loop4.json</code></pre>
+
+<p>To resume a crashed run, set <code>resume: true</code> in your config.</p>
+
+<h2>Adding evaluation</h2>
+
+<p>To see accuracy during the run:</p>
+<pre><code class="language-yaml">routing:
+  evaluation: exact_match
+  task: math</code></pre>
+
+<p>This compares candidates against <code>gt</code> (ground truth) and reports <code>eval_mean_acc</code>, <code>eval_pass_at_k</code>, and <code>eval_majority_vote</code> in the metrics.</p>
+
+<h2>Scaling up</h2>
+
+<h3>More models</h3>
+<p>Add a third model and adjust percentiles:</p>
+<pre><code class="language-yaml">routing:
+  confidence_percentiles: [33.0, 66.0]  # 2 thresholds for 3 tiers
+
+models:
+  - name: Qwen/Qwen3-30B-A3B-Instruct-2507     # cheap
+    base_url: http://localhost:8002/v1
+  - name: Qwen/Qwen3-235B-A22B-Instruct-2507    # mid
+    base_url: http://localhost:8001/v1
+  - name: openai/gpt-5-mini                      # expensive
+    base_url: https://api.openai.com/v1
+    api_key: sk-...</code></pre>
+
+<h3>Lite aggregation</h3>
+<p>Skip the LLM entirely for high-consensus groups:</p>
+<pre><code class="language-yaml">routing:
+  lite_fraction: 0.25    # top 25% of easy groups use majority vote</code></pre>
+
+<h3>Weighted selection + accumulation</h3>
+<p>Focus on high-fitness candidates and grow the population over time:</p>
+<pre><code class="language-yaml">routing:
+  selection: weighted
+  selection_temperature: 0.5   # lower = more exploitation
+  update: accumulate           # append new candidates instead of replacing
+  groups: 32                   # more groups than population = oversampling</code></pre>
+
+<h3>Different tasks</h3>
+<p>The <code>task</code> field controls prompt templates:</p>
+<table>
+  <tr><th>Task</th><th>Answer format</th><th>Use for</th></tr>
+  <tr><td><code>math</code></td><td>\boxed{}</td><td>Math competitions (AIME, HMMT)</td></tr>
+  <tr><td><code>code</code></td><td>```python```</td><td>Code generation</td></tr>
+  <tr><td><code>gpqa_diamond</code></td><td>\boxed{A/B/C/D}</td><td>Multiple choice</td></tr>
+  <tr><td><code>discover</code></td><td>```python```</td><td>Code optimization</td></tr>
+  <tr><td><code>rg</code></td><td>&lt;answer&gt;...&lt;/answer&gt;</td><td>Reasoning Gym</td></tr>
+</table>

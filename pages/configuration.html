@@ -1,0 +1,216 @@
+<h1>Configuration</h1>
+
+<p>Configs load from YAML, JSON, or Python files via <code>load_run_config()</code>.</p>
+
+<h2>Full example</h2>
+<pre><code class="language-yaml">run_name: my_run
+
+routing:
+  k: 4                            # group size
+  population: 16                   # candidates per problem
+  groups: 16                       # groups per problem per loop
+  loops: 5                         # evolutionary iterations
+  confidence_percentiles: [50.0]   # N-1 percentiles for N models
+  fitness: confidence              # confidence or diversity
+  selection: uniform               # uniform or weighted
+  selection_temperature: 1.0
+  update: replace                  # replace or accumulate
+  lite_fraction: 0.0
+  lite_method: majority
+  recombination: aggregate
+  evaluation: none
+  task: math
+  generation_batch_size: 32
+  seed: 0
+
+models:
+  - name: Qwen/Qwen3-30B-A3B-Instruct-2507
+    base_url: http://localhost:8001/v1
+    api_key: EMPTY
+    max_tokens: 8192
+    temperature: 0.7
+    top_p: 0.8
+
+  - name: Qwen/Qwen3-235B-A22B-Instruct-2507
+    base_url: http://localhost:8000/v1
+    api_key: EMPTY
+    max_tokens: 8192
+    temperature: 0.7
+    top_p: 0.8
+
+scoring_model:
+  name: Qwen/Qwen3-30B-A3B-Instruct-2507
+  base_url: http://localhost:8001/v1
+  prompt_logprobs: true
+  vllm_extensions: true
+
+resume: false
+checkpoint_dir: ./artifacts/checkpoints
+metrics_path: ./artifacts/metrics.json</code></pre>
+
+<h2>Routing fields</h2>
+<table>
+  <tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr>
+  <tr><td><code>k</code></td><td>int</td><td>required</td><td>Group size</td></tr>
+  <tr><td><code>population</code></td><td>int</td><td>required</td><td>Candidates per problem</td></tr>
+  <tr><td><code>groups</code></td><td>int</td><td>population</td><td>Groups per problem per loop</td></tr>
+  <tr><td><code>loops</code></td><td>int</td><td>required</td><td>Total iterations</td></tr>
+  <tr><td><code>confidence_percentiles</code></td><td>list[float]</td><td>[50.0]</td><td>N-1 percentile thresholds</td></tr>
+  <tr><td><code>fitness</code></td><td>str</td><td>"confidence"</td><td>confidence or diversity</td></tr>
+  <tr><td><code>selection</code></td><td>str</td><td>"uniform"</td><td>uniform or weighted</td></tr>
+  <tr><td><code>update</code></td><td>str</td><td>"replace"</td><td>replace or accumulate</td></tr>
+  <tr><td><code>lite_fraction</code></td><td>float</td><td>0.0</td><td>Fraction routed to lite agg</td></tr>
+  <tr><td><code>recombination</code></td><td>str</td><td>"aggregate"</td><td>aggregate or synthesize</td></tr>
+  <tr><td><code>evaluation</code></td><td>str</td><td>"none"</td><td>exact_match, none, or custom</td></tr>
+  <tr><td><code>task</code></td><td>str</td><td>"math"</td><td>math, code, gpqa_diamond, rg, discover</td></tr>
+  <tr><td><code>seed</code></td><td>int/null</td><td>0</td><td>Random seed</td></tr>
+</table>
+
+<h2>Model fields</h2>
+<table>
+  <tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr>
+  <tr><td><code>name</code></td><td>str</td><td>required</td><td>Model identifier</td></tr>
+  <tr><td><code>base_url</code></td><td>str</td><td>required</td><td>OpenAI-compatible endpoint</td></tr>
+  <tr><td><code>api_key</code></td><td>str</td><td>"EMPTY"</td><td>API key</td></tr>
+  <tr><td><code>max_tokens</code></td><td>int</td><td>8192</td><td>Max completion tokens</td></tr>
+  <tr><td><code>temperature</code></td><td>float</td><td>1.0</td><td>Sampling temperature</td></tr>
+  <tr><td><code>top_p</code></td><td>float</td><td>1.0</td><td>Nucleus sampling</td></tr>
+  <tr><td><code>max_concurrency</code></td><td>int</td><td>32</td><td>Concurrency limit</td></tr>
+  <tr><td><code>prompt_logprobs</code></td><td>bool</td><td>false</td><td>Request prompt logprobs</td></tr>
+  <tr><td><code>vllm_extensions</code></td><td>bool</td><td>false</td><td>Custom vLLM confidence</td></tr>
+</table>
+
+<h2>Config formats</h2>
+<p>Configs can be YAML files, Python files (must export a <code>config</code> variable), or registered by name via <code>--include-path</code>.</p>
+<pre><code class="language-bash"># YAML
+squeeze-evolve-client --config my_config.yaml --input data.parquet
+
+# Python
+squeeze-evolve-client --config my_config.py --input data.parquet
+
+# Registry name (auto-discover .py files in a directory)
+squeeze-evolve-client --config fast --include-path presets/ --input data.parquet</code></pre>
+
+<h2>N-model routing</h2>
+
+<p>The <code>models</code> list supports any number of models (cheapest first). For N models, provide exactly N-1 <code>confidence_percentiles</code>.</p>
+
+<ol>
+  <li>Compute fitness for each group of K candidates</li>
+  <li>Compute thresholds per-problem via <code>np.percentile(fitnesses, p)</code></li>
+  <li>Assign groups to model tiers by fitness vs thresholds</li>
+</ol>
+
+<table>
+  <tr><th>Condition</th><th>Assignment</th></tr>
+  <tr><td>fitness &le; threshold[0]</td><td>model_{N-1} (most expensive)</td></tr>
+  <tr><td>threshold[i-1] &lt; fitness &le; threshold[i]</td><td>model_{N-1-i}</td></tr>
+  <tr><td>fitness &gt; threshold[-1]</td><td>model_0 (cheapest)</td></tr>
+</table>
+
+<div class="callout note">
+  <strong>Per-problem thresholds</strong>
+  Thresholds are computed from each problem's own fitness distribution. A problem where all groups have high confidence still routes some groups to the expensive model.
+</div>
+
+<h3>Two-model example</h3>
+<pre><code class="language-yaml">routing:
+  confidence_percentiles: [50.0]
+
+models:
+  - name: Qwen/Qwen3-30B-A3B-Instruct-2507    # model_0 (cheap)
+    base_url: http://localhost:8001/v1
+  - name: Qwen/Qwen3-235B-A22B-Instruct-2507   # model_1 (expensive)
+    base_url: http://localhost:8000/v1</code></pre>
+
+<h3>Three-model example</h3>
+<pre><code class="language-yaml">routing:
+  confidence_percentiles: [33.0, 66.0]
+
+models:
+  - name: cheap-model        # model_0: above 66th percentile
+    base_url: ...
+  - name: mid-model          # model_1: between 33rd and 66th
+    base_url: ...
+  - name: expensive-model    # model_2: below 33rd percentile
+    base_url: ...</code></pre>
+
+<h3>Lite aggregation</h3>
+<pre><code class="language-yaml">routing:
+  lite_fraction: 0.25      # top 25% of model_0 groups skip the LLM
+  lite_method: majority     # majority vote (or random)</code></pre>
+
+<h2>Scoring policy</h2>
+
+<table>
+  <tr><th>Setup</th><th>Scoring</th><th>Cost</th></tr>
+  <tr><td>Single model, <code>prompt_logprobs: true</code></td><td>Self-confidence</td><td>Zero</td></tr>
+  <tr><td>Multi-model</td><td>Dedicated <code>scoring_model</code></td><td>One prefill per candidate</td></tr>
+  <tr><td><code>fitness: diversity</code></td><td>Answer-level signal</td><td>Zero</td></tr>
+</table>
+
+<h3>Self-confidence</h3>
+<pre><code class="language-yaml">models:
+  - name: Qwen/Qwen3-30B-A3B-Instruct-2507
+    base_url: http://localhost:8001/v1
+    prompt_logprobs: true</code></pre>
+
+<h3>Cross-model scoring</h3>
+<pre><code class="language-yaml">scoring_model:
+  name: Qwen/Qwen3-30B-A3B-Instruct-2507
+  base_url: http://localhost:8001/v1
+  prompt_logprobs: true
+  vllm_extensions: true</code></pre>
+
+<div class="callout tip">
+  <strong>Tip</strong>
+  The scoring model can share the same server as a generation model. No extra GPU needed.
+</div>
+
+<h3>Diversity fitness</h3>
+<pre><code class="language-yaml">routing:
+  fitness: diversity    # no logprobs needed, no scoring_model required</code></pre>
+
+<h3>Validation rules</h3>
+<ul>
+  <li>Multi-model + confidence requires explicit <code>scoring_model</code></li>
+  <li><code>scoring_model</code> must have <code>vllm_extensions: true</code></li>
+  <li>Single model without <code>prompt_logprobs</code> requires a <code>scoring_model</code></li>
+</ul>
+
+<h2>Storage backends</h2>
+
+<p>Backend is selected automatically from the path prefix.</p>
+
+<table>
+  <tr><th>Prefix</th><th>Backend</th><th>Dependency</th></tr>
+  <tr><td><code>./path</code></td><td>Local filesystem</td><td>built-in</td></tr>
+  <tr><td><code>s3://</code></td><td>Amazon S3</td><td><code>squeeze-evolve[aws]</code></td></tr>
+  <tr><td><code>gs://</code></td><td>Google Cloud Storage</td><td><code>squeeze-evolve[gcs]</code></td></tr>
+</table>
+
+<pre><code class="language-yaml"># Local
+checkpoint_dir: ./artifacts/checkpoints
+
+# S3
+checkpoint_dir: s3://my-bucket/runs/checkpoints
+
+# GCS
+checkpoint_dir: gs://my-bucket/runs/checkpoints</code></pre>
+
+<h3>What gets stored</h3>
+<p><strong>Checkpoints:</strong> one JSON per loop (<code>{run_name}_loop{t}.json</code>) with problem state and metrics.</p>
+<p><strong>Metrics:</strong> a JSON array at <code>metrics_path</code>, one entry per loop.</p>
+
+<table>
+  <tr><th>Category</th><th>Fields</th></tr>
+  <tr><td>Routing</td><td><code>model_{i}_count</code>, <code>lite_count</code>, <code>thresholds</code></td></tr>
+  <tr><td>Tokens</td><td><code>model_{i}_input_tokens</code>, <code>model_{i}_output_tokens</code>, <code>total_*</code></td></tr>
+  <tr><td>Timing</td><td><code>time_scoring_s</code>, <code>time_generation_s</code>, <code>time_total_s</code></td></tr>
+  <tr><td>Confidence</td><td><code>mean/median/min/max/std_confidence</code></td></tr>
+  <tr><td>Eval</td><td><code>eval_*</code></td></tr>
+</table>
+
+<h3>Resume</h3>
+<pre><code class="language-yaml">run_name: my_experiment
+resume: true</code></pre>

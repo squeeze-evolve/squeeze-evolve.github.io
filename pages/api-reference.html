@@ -1,0 +1,74 @@
+<h1>CLI &amp; Server API</h1>
+
+<h2>squeeze-evolve-client</h2>
+<pre><code class="language-bash">squeeze-evolve-client --config CONFIG --input INPUT [--output OUTPUT] [--n-problems N] [--include-path DIR]</code></pre>
+
+<table>
+  <tr><th>Flag</th><th>Required</th><th>Description</th></tr>
+  <tr><td><code>--config</code></td><td>yes</td><td>YAML, JSON, Python file, or registry name</td></tr>
+  <tr><td><code>--input</code></td><td>yes</td><td>.parquet, .jsonl, or .json dataset</td></tr>
+  <tr><td><code>--output</code></td><td>no</td><td>Output file (stdout if omitted)</td></tr>
+  <tr><td><code>--n-problems</code></td><td>no</td><td>Limit number of problems</td></tr>
+  <tr><td><code>--include-path</code></td><td>no</td><td>Directory of .py config presets</td></tr>
+</table>
+
+<h3>Examples</h3>
+<pre><code class="language-bash"># Basic run
+squeeze-evolve-client \
+  --config configs/examples/qwen3-235b_qwen3-30b_math.yaml \
+  --input data/aime25/test.parquet
+
+# Save results, limit to 5 problems
+squeeze-evolve-client \
+  --config configs/examples/three_model_math.yaml \
+  --input data/aime25/test.parquet \
+  --output results.json \
+  --n-problems 5</code></pre>
+
+<h2>squeeze-evolve-server</h2>
+<pre><code class="language-bash">squeeze-evolve-server [--host HOST] [--port PORT]</code></pre>
+
+<table>
+  <tr><th>Flag</th><th>Default</th><th>Description</th></tr>
+  <tr><td><code>--host</code></td><td>0.0.0.0</td><td>Bind address</td></tr>
+  <tr><td><code>--port</code></td><td>8080</td><td>Bind port</td></tr>
+</table>
+
+<h2>squeeze-evolve-eval</h2>
+<p>Alias for <code>squeeze-evolve-client</code>.</p>
+
+<h2>HTTP endpoints</h2>
+
+<h3>GET /health</h3>
+<pre><code class="language-json">{"status": "ok"}</code></pre>
+
+<h3>GET /capabilities</h3>
+<pre><code class="language-json">{
+  "transport": "async-openai-sdk-only",
+  "backends": ["closed_api", "openweight_api", "local_vllm"]
+}</code></pre>
+
+<h3>POST /run</h3>
+<p>Execute a full evolutionary loop. Request body:</p>
+<pre><code class="language-json">{
+  "config": {
+    "run_name": "my_run",
+    "routing": { "k": 4, "population": 16, "loops": 5 },
+    "models": [
+      { "name": "cheap", "base_url": "http://localhost:8001/v1" },
+      { "name": "expensive", "base_url": "http://localhost:8000/v1" }
+    ]
+  },
+  "problems": [
+    { "orig_prompt": "Find the sum of...", "gt": "42" }
+  ]
+}</code></pre>
+
+<p>Response:</p>
+<pre><code class="language-json">{
+  "run_id": "my_run_a1b2c3d4",
+  "metrics": [ { "loop": 0, "..." } ],
+  "problems": [ { "orig_prompt": "...", "candidates": ["..."] } ]
+}</code></pre>
+
+<p>Interactive docs: Swagger UI at <code>/docs</code>, ReDoc at <code>/redoc</code>.</p>

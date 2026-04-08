@@ -1,0 +1,130 @@
+<h1>API: Core</h1>
+<p><code>squeeze_evolve.core</code></p>
+
+<h2>Configuration</h2>
+<p><code>squeeze_evolve.core.config</code></p>
+
+<h3>RunConfig</h3>
+<div class="sig"><span class="kw">class</span> <span class="cls">RunConfig</span>(<span class="type">BaseModel</span>)</div>
+<table>
+  <tr><th>Field</th><th>Type</th><th>Default</th></tr>
+  <tr><td><code>run_name</code></td><td>str</td><td>"default"</td></tr>
+  <tr><td><code>routing</code></td><td>RoutingConfig</td><td>required</td></tr>
+  <tr><td><code>models</code></td><td>list[ModelConfig]</td><td>required</td></tr>
+  <tr><td><code>scoring_model</code></td><td>ModelConfig | None</td><td>None</td></tr>
+  <tr><td><code>retry</code></td><td>RetryConfig</td><td>RetryConfig()</td></tr>
+  <tr><td><code>resume</code></td><td>bool</td><td>False</td></tr>
+  <tr><td><code>checkpoint_dir</code></td><td>str</td><td>"./artifacts/checkpoints"</td></tr>
+  <tr><td><code>metrics_path</code></td><td>str</td><td>"./artifacts/metrics.json"</td></tr>
+</table>
+
+<h3>RoutingConfig</h3>
+<div class="sig"><span class="kw">class</span> <span class="cls">RoutingConfig</span>(<span class="type">BaseModel</span>)</div>
+<p>See <a href="#configuration">Configuration</a> for the full field reference.</p>
+
+<h3>ModelConfig</h3>
+<div class="sig"><span class="kw">class</span> <span class="cls">ModelConfig</span>(<span class="type">BaseModel</span>)</div>
+<table>
+  <tr><th>Field</th><th>Type</th><th>Default</th></tr>
+  <tr><td><code>name</code></td><td>str</td><td>required</td></tr>
+  <tr><td><code>base_url</code></td><td>str</td><td>required</td></tr>
+  <tr><td><code>api_key</code></td><td>str</td><td>"EMPTY"</td></tr>
+  <tr><td><code>served_model_name</code></td><td>str | None</td><td>None</td></tr>
+  <tr><td><code>max_tokens</code></td><td>int</td><td>8192</td></tr>
+  <tr><td><code>temperature</code></td><td>float</td><td>1.0</td></tr>
+  <tr><td><code>top_p</code></td><td>float</td><td>1.0</td></tr>
+  <tr><td><code>max_concurrency</code></td><td>int</td><td>32</td></tr>
+  <tr><td><code>prompt_logprobs</code></td><td>bool</td><td>False</td></tr>
+  <tr><td><code>vllm_extensions</code></td><td>bool</td><td>False</td></tr>
+</table>
+
+<h3>RetryConfig</h3>
+<div class="sig"><span class="kw">class</span> <span class="cls">RetryConfig</span>(<span class="type">BaseModel</span>)</div>
+<table>
+  <tr><th>Field</th><th>Type</th><th>Default</th></tr>
+  <tr><td><code>max_retries</code></td><td>int</td><td>5</td></tr>
+  <tr><td><code>base_backoff_seconds</code></td><td>float</td><td>1.0</td></tr>
+  <tr><td><code>max_backoff_seconds</code></td><td>float</td><td>30.0</td></tr>
+  <tr><td><code>request_timeout_seconds</code></td><td>float</td><td>120.0</td></tr>
+  <tr><td><code>jitter_seconds</code></td><td>float</td><td>0.5</td></tr>
+</table>
+
+<h3>validate_scoring_policy</h3>
+<div class="sig"><span class="kw">def</span> <span class="cls">validate_scoring_policy</span>(<span class="arg">cfg</span>: <span class="type">RunConfig</span>) → <span class="type">None</span></div>
+<p>Raises <code>ValueError</code> if the scoring model setup is invalid for the given fitness mode and model count.</p>
+
+<hr>
+
+<h2>Backend</h2>
+<p><code>squeeze_evolve.core.backend</code></p>
+
+<h3>GenerationResponse</h3>
+<div class="sig"><span class="kw">@dataclass</span> <span class="kw">class</span> <span class="cls">GenerationResponse</span></div>
+<table>
+  <tr><th>Field</th><th>Type</th><th>Default</th></tr>
+  <tr><td><code>text</code></td><td>str</td><td>required</td></tr>
+  <tr><td><code>prompt_tokens</code></td><td>int</td><td>0</td></tr>
+  <tr><td><code>completion_tokens</code></td><td>int</td><td>0</td></tr>
+  <tr><td><code>prompt_logprob_score</code></td><td>float | None</td><td>None</td></tr>
+</table>
+
+<h3>GenerationBackend</h3>
+<div class="sig"><span class="kw">class</span> <span class="cls">GenerationBackend</span>(<span class="type">Protocol</span>)</div>
+<table>
+  <tr><th>Method</th><th>Signature</th></tr>
+  <tr><td><code>generate</code></td><td><code>async (prompts: list[str]) → list[GenerationResponse]</code></td></tr>
+  <tr><td><code>prompt_confidence</code></td><td><code>async (full_texts, start_idxs) → list[float | None]</code></td></tr>
+</table>
+
+<h3>OpenAIBackend</h3>
+<div class="sig"><span class="kw">class</span> <span class="cls">OpenAIBackend</span>(<span class="arg">cfg</span>: <span class="type">ModelConfig</span>, <span class="arg">retry_cfg</span>: <span class="type">RetryConfig</span>)</div>
+<p>Unified async backend. Handles retry with exponential backoff, concurrency limiting via semaphore, and both generation and prompt confidence scoring.</p>
+
+<div class="sig"><span class="kw">async def</span> <span class="cls">generate_batched</span>(<span class="arg">prompts</span>: <span class="type">list[str]</span>, <span class="arg">batch_size</span>: <span class="type">int</span> = 32) → <span class="type">list[GenerationResponse]</span></div>
+
+<h3>RetryPolicy</h3>
+<div class="sig"><span class="kw">@dataclass</span> <span class="kw">class</span> <span class="cls">RetryPolicy</span></div>
+<p>Retries on <code>RateLimitError</code>, <code>APIConnectionError</code>, <code>APITimeoutError</code>, and 5xx. Exponential backoff with jitter.</p>
+
+<h3>make_backend</h3>
+<div class="sig"><span class="kw">def</span> <span class="cls">make_backend</span>(<span class="arg">model_cfg</span>, <span class="arg">retry_cfg</span>) → <span class="type">GenerationBackend</span></div>
+
+<hr>
+
+<h2>Storage</h2>
+<p><code>squeeze_evolve.core.storage</code></p>
+
+<h3>Storage protocol</h3>
+<div class="sig"><span class="kw">class</span> <span class="cls">Storage</span>(<span class="type">Protocol</span>)</div>
+<table>
+  <tr><th>Method</th><th>Signature</th></tr>
+  <tr><td><code>save_json</code></td><td><code>(key: str, data: Any) → None</code></td></tr>
+  <tr><td><code>load_json</code></td><td><code>(key: str) → Any</code></td></tr>
+  <tr><td><code>list_files</code></td><td><code>(prefix: str) → list[str]</code></td></tr>
+  <tr><td><code>exists</code></td><td><code>(key: str) → bool</code></td></tr>
+</table>
+
+<h3>Implementations</h3>
+<div class="sig"><span class="kw">class</span> <span class="cls">LocalStorage</span>(<span class="arg">root</span>: <span class="type">str</span>)</div>
+<div class="sig"><span class="kw">class</span> <span class="cls">S3Storage</span>(<span class="arg">bucket</span>: <span class="type">str</span>, <span class="arg">prefix</span>: <span class="type">str</span> = "") &nbsp;&mdash;&nbsp; requires <code>boto3</code></div>
+<div class="sig"><span class="kw">class</span> <span class="cls">GCSStorage</span>(<span class="arg">bucket</span>: <span class="type">str</span>, <span class="arg">prefix</span>: <span class="type">str</span> = "") &nbsp;&mdash;&nbsp; requires <code>google-cloud-storage</code></div>
+
+<h3>create_storage</h3>
+<div class="sig"><span class="kw">def</span> <span class="cls">create_storage</span>(<span class="arg">path</span>: <span class="type">str</span>) → <span class="type">Storage</span></div>
+<p>Factory. <code>s3://</code> → S3, <code>gs://</code> → GCS, else local.</p>
+
+<hr>
+
+<h2>Data Loading</h2>
+<p><code>squeeze_evolve.core.data</code></p>
+
+<div class="sig"><span class="kw">def</span> <span class="cls">load_dataset</span>(<span class="arg">path</span>: <span class="type">str</span>, <span class="arg">n_problems</span>: <span class="type">int | None</span> = <span class="type">None</span>) → <span class="type">list[dict]</span></div>
+<p>Auto-detect format and load. Supports <code>.parquet</code>, <code>.jsonl</code>, <code>.json</code>.</p>
+
+<div class="sig"><span class="kw">def</span> <span class="cls">load_parquet</span>(<span class="arg">path</span>: <span class="type">str</span>, <span class="arg">n_problems</span>: <span class="type">int | None</span> = <span class="type">None</span>) → <span class="type">list[dict]</span></div>
+<p>Extracts <code>orig_prompt</code> from <code>prompt</code> column and <code>gt</code> from <code>reward_model.ground_truth</code>.</p>
+
+<div class="sig"><span class="kw">def</span> <span class="cls">load_jsonl</span>(<span class="arg">path</span>: <span class="type">str</span>, <span class="arg">n_problems</span>: <span class="type">int | None</span> = <span class="type">None</span>) → <span class="type">list[dict]</span></div>
+
+<div class="sig"><span class="kw">def</span> <span class="cls">list_datasets</span>(<span class="arg">data_dir</span>: <span class="type">str</span> = "data") → <span class="type">list[str]</span></div>
+<p>Scan subdirectories for parquet/jsonl/json files.</p>

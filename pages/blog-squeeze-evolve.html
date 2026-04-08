@@ -1,0 +1,411 @@
+<h1>Squeeze Evolve: A Unified Framework for Verifier-Free Evolution</h1>
+<p class="blog-meta"><time>April 2026</time> &middot; Research</p>
+
+<p>Test-time scaling lets language models think harder on problems that matter. Instead of generating a single answer, models produce many candidates and iteratively refine them through selection and recombination. When paired with an external verifier, this evolutionary approach has produced breakthroughs in code generation and scientific discovery.</p>
+
+<p>But in many important domains, verification is too expensive, too slow, or simply unavailable. A single tokamak plasma simulation can consume over 120 million CPU-hours. Running a wet-lab experiment takes weeks. In these settings, evolution must proceed without ground-truth feedback.</p>
+
+<p>This is the setting we study: <strong>verifier-free evolution</strong>. And the central question we ask is not "how can we spend more compute?" but rather <em>"how can we achieve a given capability target under tight budget constraints?"</em></p>
+
+<figure class="blog-figure">
+  <img src="assets/figures/teaser_scaling.png" alt="Squeeze Evolve shifts the cost-capability frontier, achieving ~3x lower cost and ~10x throughput">
+  <figcaption>Squeeze Evolve shifts the cost-capability Pareto frontier: multi-model orchestration achieves ~3x lower cost and ~10x throughput gains across ARC-AGI-V2, MMMU-Pro, and BabyVision.</figcaption>
+</figure>
+
+<!-- ------------------------------------------------------------ -->
+
+<h2>One Framework for Many Methods</h2>
+
+<p>The test-time scaling landscape looks fragmented. <a href="https://arxiv.org/abs/2203.11171" target="_blank">Majority voting</a>, <a href="https://arxiv.org/abs/2303.17651" target="_blank">self-refinement</a>, <a href="https://arxiv.org/abs/2502.01839" target="_blank">recursive self-aggregation (RSA)</a>, <a href="https://arxiv.org/abs/2506.13131" target="_blank">AlphaEvolve</a>: each has its own paper, its own codebase, its own framing. But when you step back, they share a common skeleton.</p>
+
+<p>We show that all of these methods can be expressed as instances of a single evolutionary framework. For a query, we initialize a population using an ancestor function, then repeatedly apply an evolutionary operator that encapsulates selection followed by recombination:</p>
+
+<div style="text-align:center; line-height: 1.8; padding: 4px 0; color: #fff;">
+$$\Phi_f(P) = \mathrm{recomb}_f \circ \mathrm{select}_f(P)$$
+$$P^{(t+1)} = \Phi_f\!\left(P^{(t)}\right)$$
+</div>
+
+<p>This induces an iterated evolutionary process where the final population is derived via a sequence of operator compositions. In verifier-free evolution, the fitness signal <em>f</em> is derived entirely from the models' own outputs (e.g., log-probabilities, consensus frequency) without access to an external verifier. Different methods simply instantiate <em>select</em>, <em>recomb</em>, and <em>f</em> differently:</p>
+
+<table>
+  <tr>
+    <th>Method</th>
+    <th>Loops</th>
+    <th>Selection</th>
+    <th>Recombination</th>
+    <th>Fitness Signal</th>
+    <th>Models</th>
+  </tr>
+  <tr>
+    <td><a href="https://arxiv.org/abs/2203.11171" target="_blank">Majority Voting</a></td>
+    <td>1</td>
+    <td>Answer clustering</td>
+    <td>Identity</td>
+    <td>Consensus frequency</td>
+    <td>Single</td>
+  </tr>
+  <tr>
+    <td><a href="https://arxiv.org/abs/2303.17651" target="_blank">Self-Refinement</a></td>
+    <td>T</td>
+    <td>Self-critique</td>
+    <td>Conditioned rewrite</td>
+    <td>Natural language</td>
+    <td>Single</td>
+  </tr>
+  <tr>
+    <td><a href="https://arxiv.org/abs/2502.01839" target="_blank">RSA</a></td>
+    <td>T</td>
+    <td>K-subset</td>
+    <td>LLM aggregation</td>
+    <td>Implicit</td>
+    <td>Single</td>
+  </tr>
+  <tr>
+    <td><a href="https://arxiv.org/abs/2506.13131" target="_blank">AlphaEvolve</a></td>
+    <td>T</td>
+    <td>Fitness-guided</td>
+    <td>LLM aggregation</td>
+    <td>External verifier</td>
+    <td>Multi</td>
+  </tr>
+  <tr>
+    <td><strong>Squeeze Evolve</strong></td>
+    <td>T</td>
+    <td>Fitness-guided</td>
+    <td>Mixed routing</td>
+    <td>Model-intrinsic</td>
+    <td><strong>Multi</strong></td>
+  </tr>
+</table>
+
+<p>This unification is not merely aesthetic. Once you see these methods as operator choices within a shared framework, two design questions become immediate:</p>
+
+<ol>
+  <li>Given models with different cost and capability, which model should handle each operator in the pipeline?</li>
+  <li>How should models be coordinated to maximize capability per unit cost?</li>
+</ol>
+
+<p>These are the questions Squeeze Evolve answers.</p>
+
+<!-- ------------------------------------------------------------ -->
+
+<h2>Two Bottlenecks of Verifier-Free Evolution</h2>
+
+<p>Before building a solution, we need to understand what goes wrong. Our analysis reveals two intertwined failures in single-model verifier-free evolution:</p>
+
+<p><strong>Diversity collapse.</strong> Without external correction, the population converges toward a narrow solution mode. The model amplifies trajectories it already knows how to recognize and reproduce, discarding rare but correct alternatives. Pass@K drops alongside semantic diversity. Once diversity is lost, it cannot be recovered: later loops only recombine descendants of surviving trajectories.</p>
+
+<figure class="blog-figure">
+  <img src="assets/figures/diversity_collapse_gpqa_120b_30b.png" alt="Diversity collapse in single-model evolution on GPQA-Diamond: semantic diversity and pass@K both decline over loops">
+  <figcaption>Single-model baselines (gray, red) progressively collapse toward narrow solution modes on GPQA-Diamond: both semantic diversity (left) and pass@K (right) decline over loops. Squeeze Evolve (green) maintains complementary lineages, staying higher and flatter on both metrics.</figcaption>
+</figure>
+
+<p><strong>Cost explosion.</strong> Evolutionary loops generate 500&ndash;700x more tokens than standard inference. Using a single frontier model for every recombination step is economically impractical. And the cost gap between models is enormous: proprietary reasoning models cost 4&ndash;25x more per output token than strong open-weight alternatives.</p>
+
+<p>These bottlenecks are connected. Multi-model orchestration addresses both: models with different priors, failure modes, and reasoning styles maintain complementary lineages (solving diversity collapse), while routing easy groups to cheaper models reduces cost (solving cost explosion).</p>
+
+<!-- ------------------------------------------------------------ -->
+
+<h2>Three Empirical Observations</h2>
+
+<p>The design of Squeeze Evolve is motivated by three findings from our analysis:</p>
+
+<p><strong>1. Initialization dominates final accuracy.</strong> The quality of loop 0 (the initial population) is the single strongest predictor of final performance. On AIME 2025, reversing which model initializes vs. recombines drops accuracy by up to 23 percentage points. This tells us: use the strongest model where it matters most, at initialization.</p>
+
+<table>
+  <tr>
+    <th>Model Pair</th>
+    <th>Benchmark</th>
+    <th>Strong&rarr;Weak</th>
+    <th>Weak&rarr;Strong</th>
+    <th>&Delta;</th>
+  </tr>
+  <tr>
+    <td>GPT-OSS-120B / GPT-OSS-20B</td>
+    <td>HMMT 2025</td>
+    <td><strong>0.89</strong></td>
+    <td>0.85</td>
+    <td><strong>+4</strong></td>
+  </tr>
+  <tr>
+    <td>Qwen3-4B-Thinking / Qwen3-4B-Instruct</td>
+    <td>AIME 2025</td>
+    <td><strong>0.88</strong></td>
+    <td>0.65</td>
+    <td><strong>+23</strong></td>
+  </tr>
+</table>
+<p style="font-size:12px;color:var(--t3);margin-top:4px;">Strong&rarr;Weak: strong model initializes, weak model aggregates. Weak&rarr;Strong: reversed. &Delta; in percentage points.</p>
+
+<p><strong>2. Weak models are strong aggregators when the candidate set is strong.</strong> When a group already contains correct trajectories, even much smaller models can aggregate them effectively. Aggregation accuracy rises from 0% with no correct candidates to near 100% when all candidates are correct. The expensive model's advantage is concentrated on the hardest, most uncertain groups.</p>
+
+<figure class="blog-figure">
+  <img src="assets/figures/agg_accuracy_combined.png" alt="Aggregation accuracy at extremes: 0 vs 4 correct trajectories for Qwen and GPT-OSS model pairs on AIME 2025 and HMMT 2025">
+  <figcaption>Aggregation accuracy at the extremes: with zero correct seeds, neither model recovers a correct answer; with all seeds correct, both achieve near-perfect accuracy. This holds across model families (Qwen, GPT-OSS) and benchmarks (AIME 2025, HMMT 2025).</figcaption>
+</figure>
+
+<p><strong>3. Model confidence predicts group quality.</strong> Group Confidence (GC), derived from token log-probabilities, cleanly separates groups containing correct trajectories from those that do not. This signal is free (produced during inference), works across model families, and transfers across routing directions. It gives us a zero-cost fitness signal for deciding which groups need the expensive model.</p>
+
+<figure class="blog-figure">
+  <img src="assets/figures/gc_vs_loop_combined.png" alt="Group confidence separates correct from incorrect trajectories across evolutionary loops on AIME 2025">
+  <figcaption>Mean group confidence across RSA loops 1&ndash;9 on AIME 2025, split by whether the subset contains at least one correct trajectory. Left: self-model confidence (GPT-OSS-120B). Right: cross-model confidence (GPT-OSS-20B scoring GPT-OSS-120B candidates). In both settings, correct-containing subsets maintain consistently higher GC.</figcaption>
+</figure>
+
+<!-- ------------------------------------------------------------ -->
+
+<h2>Squeeze Evolve: Confidence-Based Multi-Model Routing</h2>
+
+<p>These observations lead to a simple principle: <strong>allocate model capability where it has the highest marginal utility.</strong> Expensive models handle the hardest groups; cheaper models handle the rest; groups that already agree skip the LLM entirely.</p>
+
+<figure class="blog-figure">
+  <img src="assets/figures/method_fig.png" alt="Squeeze Evolve method overview showing evolutionary loop with multi-model routing">
+  <figcaption>The Squeeze Evolve evolutionary loop. Loop 0 initializes the population with the strongest model. Subsequent loops score candidates, form groups, route each group to the appropriate model tier based on fitness, recombine in parallel, and update the population.</figcaption>
+</figure>
+
+<p><strong>Loop 0</strong> uses the most expensive model to generate the initial population. This is where model capability has the highest impact.</p>
+
+<p><strong>Loops 1..T</strong> run five stages: score candidates via a fitness signal, select groups, route each group to a model tier based on fitness, recombine all tiers in parallel, and update the population. The routing percentile is the single knob that smoothly trades accuracy for cost.</p>
+
+<p>The framework naturally supports any number of model tiers. In our experiments we use two models, but the same mechanism extends to three or more. It also supports both open-source and proprietary models, homogeneous and heterogeneous pairings, and text-only or multimodal settings.</p>
+
+<p>Critically, different benchmarks and tasks require different operator choices. Math and coding use group confidence with uniform selection. ARC-AGI-V2 uses answer diversity (since the Gemini API does not expose logprobs). Circle packing uses fitness-weighted selection and population accumulation. The unified framework makes these variations a matter of configuration, not reimplementation.</p>
+
+<!-- ------------------------------------------------------------ -->
+
+<h2>Results Across Eight Benchmarks</h2>
+
+<div class="results-grid">
+  <div class="rstat">
+    <div class="rstat__value">1.4&ndash;3.3x</div>
+    <div class="rstat__label">Cost savings</div>
+  </div>
+  <div class="rstat">
+    <div class="rstat__value">4&ndash;10x</div>
+    <div class="rstat__label">Throughput gain</div>
+  </div>
+  <div class="rstat">
+    <div class="rstat__value">97.5%</div>
+    <div class="rstat__label">ARC-AGI-V2</div>
+  </div>
+  <div class="rstat">
+    <div class="rstat__value">0</div>
+    <div class="rstat__label">Verifiers required</div>
+  </div>
+  <div class="rstat">
+    <div class="rstat__value">8</div>
+    <div class="rstat__label">Benchmarks</div>
+  </div>
+</div>
+
+<p>We evaluate across math (<a href="https://artofproblemsolving.com/wiki/index.php/2025_AIME" target="_blank">AIME 2025</a>, <a href="https://matharena.ai/" target="_blank">HMMT 2025</a>, <a href="https://arxiv.org/abs/2311.12022" target="_blank">GPQA-Diamond</a>), coding (<a href="https://arxiv.org/abs/2403.07974" target="_blank">LiveCodeBench V6</a>), vision (<a href="https://arxiv.org/abs/2409.02813" target="_blank">MMMU-Pro</a>, <a href="https://arxiv.org/abs/2412.12345" target="_blank">BabyVision</a>), visual reasoning (<a href="https://arcprize.org/" target="_blank">ARC-AGI-V2</a>), and scientific discovery (circle packing), using five model pair configurations.</p>
+
+<h3>Math and Coding</h3>
+
+<p>With homogeneous open-source pairs (Qwen3-30B/235B, Qwen3-30B Instruct/Thinking, GPT-OSS-20B/120B), Squeeze Evolve matches or exceeds the expensive model alone at <strong>1.4&ndash;2.1x lower cost</strong>. In two of three pairs, Squeeze Evolve actually surpasses the expensive model: +1.5 points on AIME 2025 for Instruct-to-Thinking, and +2.3 points on HMMT 2025 for GPT-OSS. Even when the draft model is much smaller (30B vs. 235B), accuracy stays within 1 point while cost is nearly halved.</p>
+
+<figure class="blog-figure">
+  <img src="assets/figures/acc_vs_cost_qwen_30b_235b.png" alt="Accuracy vs. cumulative cost for Qwen3-30B/235B Instruct pair across AIME 2025, HMMT 2025, and GPQA-Diamond">
+  <figcaption>Accuracy vs. cumulative cost for Qwen3-30B-A3B / Qwen3-235B-A22B Instruct. Each point is one RSA loop (0&ndash;9). Squeeze Evolve (green) tracks the target accuracy curve while staying significantly further left, achieving comparable quality at 1.7&ndash;2.0x lower cost.</figcaption>
+</figure>
+
+<figure class="blog-figure">
+  <img src="assets/figures/acc_vs_cost_qwen_30b_thinking.png" alt="Accuracy vs. cumulative cost for Qwen3-30B Instruct/Thinking pair across AIME 2025, HMMT 2025, and GPQA-Diamond">
+  <figcaption>Accuracy vs. cumulative cost for Qwen3-30B-A3B Instruct / Thinking (same scale, different reasoning mode). Squeeze Evolve exceeds the target baseline on all three benchmarks while reducing cost.</figcaption>
+</figure>
+
+<p>With heterogeneous pairs (open-source draft + GPT-5 mini), savings reach <strong>1.4&ndash;3.3x</strong>. At conservative settings, GPT-OSS-20B paired with GPT-5 mini exceeds the expensive model alone on AIME 2025 (95.4% vs. 94.2%) at 1.8x savings.</p>
+
+<figure class="blog-figure">
+  <img src="assets/figures/acc_vs_cost_gpt_oss_gpt5mini.png" alt="Accuracy vs. cumulative cost for GPT-OSS-20B / GPT-5 mini across AIME 2025, HMMT 2025, GPQA-Diamond, and LiveCodeBench V6">
+  <figcaption>Accuracy vs. cumulative cost for GPT-OSS-20B / GPT-5 mini (heterogeneous, open-source to proprietary). Squeeze Evolve matches the expensive target curve at 1.4&ndash;1.9x lower cost across all four benchmarks.</figcaption>
+</figure>
+
+<p>No single pair dominates all benchmarks, confirming the model-agnostic design: practitioners select the pair that suits their task.</p>
+
+<h3>Vision</h3>
+
+<p>On MMMU-Pro and BabyVision, same-family pairs (Kimi-2.5 Instant/Thinking) achieve 1.8&ndash;2.5x savings. A cross-family pair (Qwen3.5-35B + Kimi-2.5 Thinking) surpasses the expensive model on MMMU-Pro (79.1% vs. 78.6%) at 2.3x savings, <em>even though the draft model never sees any images after initialization</em>.</p>
+
+<table>
+  <tr>
+    <th>Benchmark</th>
+    <th>Strategy</th>
+    <th>Model 1</th>
+    <th>Model 2</th>
+    <th>Acc.</th>
+    <th>$/Prob</th>
+    <th>Savings</th>
+  </tr>
+  <tr>
+    <td>MMMU-Pro</td>
+    <td>RSA (target)</td>
+    <td>&mdash;</td>
+    <td>Kimi-2.5-Thinking</td>
+    <td>78.6</td>
+    <td>$1.04</td>
+    <td>1.0x</td>
+  </tr>
+  <tr>
+    <td><strong>MMMU-Pro</strong></td>
+    <td><strong>Squeeze Evolve</strong></td>
+    <td>Qwen3.5-35B-A3B*</td>
+    <td>Kimi-2.5-Thinking</td>
+    <td><strong>79.1</strong></td>
+    <td><strong>$0.46</strong></td>
+    <td><strong>2.3x</strong></td>
+  </tr>
+  <tr>
+    <td>BabyVision</td>
+    <td>RSA (target)</td>
+    <td>&mdash;</td>
+    <td>Kimi-2.5-Thinking</td>
+    <td>43.2</td>
+    <td>$2.05</td>
+    <td>1.0x</td>
+  </tr>
+  <tr>
+    <td><strong>BabyVision</strong></td>
+    <td><strong>Squeeze Evolve</strong></td>
+    <td>Kimi-2.5-Instant</td>
+    <td>Kimi-2.5-Thinking</td>
+    <td>41.6</td>
+    <td><strong>$0.81</strong></td>
+    <td><strong>2.5x</strong></td>
+  </tr>
+</table>
+<p style="font-size:12px;color:var(--t3);margin-top:4px;">*Model 1 operates in text-only mode (no image input after loop 0).</p>
+
+<p>This finding is striking: visual understanding is primarily needed at loop 0. Once the population is grounded in image content, subsequent aggregation over textual reasoning chains can be delegated to a much cheaper text-only model.</p>
+
+<h3>ARC-AGI-V2</h3>
+
+<p>Since the Gemini API does not expose logprobs, we use answer diversity as the fitness signal. Groups with non-zero diversity are recombined by Gemini 3.1 Pro; consensus groups fall back to majority vote. With this routing, Squeeze Evolve achieves <strong>97.5% at $7.74/task</strong>, a 3.7x savings over the RSA baseline.</p>
+
+<p>We further reduce cost by adding Gemini 3.0 Flash as Model 1, yielding a three-way routing rule: high-diversity groups (3+ unique answers) invoke Gemini 3.1 Pro, lower-diversity groups are handled by Gemini 3.0 Flash, and consensus groups use lightweight aggregation. This achieves the same 97.5% accuracy for only $5.93/task after a single recombination step.</p>
+
+<table>
+  <tr>
+    <th>Strategy</th>
+    <th>Model 1</th>
+    <th>Model 2</th>
+    <th>Acc.</th>
+    <th>$/Task</th>
+    <th>Savings</th>
+  </tr>
+  <tr>
+    <td><a href="https://imbue.com/research/arc-agi-2/" target="_blank">Imbue</a> (code exec.)</td>
+    <td>&mdash;</td>
+    <td>Gemini 3.1 Pro</td>
+    <td>95.1</td>
+    <td>$8.71</td>
+    <td>&mdash;</td>
+  </tr>
+  <tr>
+    <td><a href="https://www.confluencelab.com/arc-agi-2" target="_blank">Confluence Lab</a> (code exec.)</td>
+    <td>&mdash;</td>
+    <td>&mdash;</td>
+    <td>97.9</td>
+    <td>$11.77</td>
+    <td>&mdash;</td>
+  </tr>
+  <tr>
+    <td>RSA (target only)</td>
+    <td>&mdash;</td>
+    <td>Gemini 3.1 Pro</td>
+    <td>93.3</td>
+    <td>$28.85</td>
+    <td>1.0x</td>
+  </tr>
+  <tr>
+    <td><strong>Squeeze Evolve</strong></td>
+    <td>&mdash;</td>
+    <td><strong>Gemini 3.1 Pro</strong></td>
+    <td><strong>97.5</strong></td>
+    <td><strong>$7.74</strong></td>
+    <td><strong>3.7x</strong></td>
+  </tr>
+  <tr>
+    <td><strong>Squeeze Evolve</strong></td>
+    <td><strong>Gemini 3.0 Flash</strong></td>
+    <td><strong>Gemini 3.1 Pro</strong></td>
+    <td><strong>97.5</strong></td>
+    <td><strong>$5.93</strong></td>
+    <td><strong>4.9x</strong></td>
+  </tr>
+</table>
+
+<p>This is a new state-of-the-art cost-capability frontier result on the ARC-AGI-V2 public evaluation set. Even compared to code-execution-based approaches, Squeeze Evolve reaches comparable accuracy at lower cost than <a href="https://www.confluencelab.com/arc-agi-2" target="_blank">Confluence Lab</a> (97.9%, $11.77/task) and <a href="https://imbue.com/research/arc-agi-2/" target="_blank">Imbue</a> (95.1%, $8.71/task).</p>
+
+<h3>Circle Packing: Scientific Discovery</h3>
+
+<p>We apply Squeeze Evolve to the circle packing problem studied in <a href="https://arxiv.org/abs/2506.13131" target="_blank">AlphaEvolve</a>: pack 26 non-overlapping circles in a unit square to maximize the sum of their radii. This is an open-ended optimization with a continuous objective.</p>
+
+<table>
+  <tr>
+    <th>Method</th>
+    <th>Model</th>
+    <th>Score (&uarr;)</th>
+  </tr>
+  <tr>
+    <td><a href="https://arxiv.org/abs/2509.19349" target="_blank">ShinkaEvolve</a></td>
+    <td>Ensemble (5 models)</td>
+    <td>2.635982</td>
+  </tr>
+  <tr>
+    <td><strong>Squeeze Evolve</strong></td>
+    <td><strong>GPT-OSS-120B + 20B</strong></td>
+    <td><strong>2.635896</strong></td>
+  </tr>
+  <tr>
+    <td><a href="https://arxiv.org/abs/2506.13131" target="_blank">AlphaEvolve</a></td>
+    <td>Gemini 2.0 Pro + Flash</td>
+    <td>2.635862</td>
+  </tr>
+  <tr>
+    <td><a href="https://github.com/codelion/openevolve" target="_blank">OpenEvolve</a></td>
+    <td>Gemini 2.0 Flash + Claude 3.7 Sonnet</td>
+    <td>2.634292</td>
+  </tr>
+</table>
+
+<p>Squeeze Evolve achieves a comparable score to the best evolutionary frameworks, notably <strong>without executing generated programs or using closed-weight models</strong>. While other frameworks rely on running candidates and feeding execution results back, Squeeze Evolve uses no ground-truth feedback. Model-intrinsic confidence, despite being a weak signal, suffices to improve solutions over iterations. This is the first verifier-free evolutionary method to match verifier-based approaches on a discovery task.</p>
+
+<!-- ------------------------------------------------------------ -->
+
+<h2>System-Level Gains</h2>
+
+<p>Cost savings on API pricing are only part of the story. When deployed on self-hosted infrastructure, Squeeze Evolve also delivers substantial system-level improvements.</p>
+
+<p><strong>Routing overhead is negligible.</strong> To isolate the cost of routing, we compare standard RSA (no routing) against Squeeze Evolve with routing enabled but all aggregation forced to the expensive model. The difference isolates the overhead of confidence scoring and model dispatch. Across all three target models, routing adds only <strong>2.4&ndash;4.3%</strong> to end-to-end latency on average.</p>
+
+<figure class="blog-figure">
+  <img src="assets/figures/routing_overhead.png" alt="Routing overhead decomposition showing recombination time and routing overhead across three target models and benchmarks">
+  <figcaption>End-to-end latency decomposed into recombination time (light green) and routing overhead (dark green). Routing adds only 2.4&ndash;4.3% to total latency on average across all three target models. Confidence scoring is a batched prefill-only operation whose cost is negligible relative to generation.</figcaption>
+</figure>
+
+<p><strong>Throughput scales with the model size ratio.</strong> Under a fixed GPU budget, the Qwen3-30B/235B pair achieves <strong>4&ndash;10x throughput speedup</strong> because routing work to the smaller model frees proportionally more GPU capacity. The GPT-OSS-20B/120B pair yields <strong>1.4&ndash;3.4x speedup</strong>. GPU pools are sized so their loop service times are approximately matched, avoiding idle capacity.</p>
+
+<figure class="blog-figure">
+  <img src="assets/figures/throughput_speedup.png" alt="Throughput speedup over RSA baseline for Qwen and GPT-OSS model pairs across four benchmarks">
+  <figcaption>Fixed-budget throughput speedup over RSA. Left: Qwen3-30B/235B achieves 4&ndash;10x speedup owing to the large size ratio. Right: GPT-OSS-20B/120B yields 1.4&ndash;3.4x speedup. Both model pairs show consistent gains across all four benchmarks.</figcaption>
+</figure>
+
+<!-- ------------------------------------------------------------ -->
+
+<h2>What This Means</h2>
+
+<p>The core contribution of Squeeze Evolve is not a single algorithm, but a way of thinking about test-time scaling. By unifying existing methods into a common evolutionary framework, we expose a shared design space that can be optimized jointly. The key insight is that different evolutionary roles have different capability requirements, and assigning models to roles based on these requirements is a powerful lever for both cost and quality.</p>
+
+<p>This reframes test-time scaling from "spend more compute" to a budgeted systems optimization problem. Progress comes not just from using more resources, but from using them more efficiently.</p>
+
+<div class="callout note">
+  <strong>Try it.</strong> Squeeze Evolve is open source. See the <a href="#getting-started">Getting Started</a> guide, explore the <a href="#framework">framework</a> for custom operators, or check out the <a href="https://github.com/Nietzsche2000/squeeze-evolve" target="_blank">GitHub repo</a>.
+</div>
+
+<h2>Citation</h2>
+
+<pre><code>@article{maheswaran2026squeezeevolve,
+  title={Squeeze Evolve: Unified Multi-Model Orchestration Framework for Verifier-Free Evolution},
+  author={Maheswaran, Monishwaran and Lakhani, Leon and Zhou, Zhongzhu and Yang, Shijia and Wang, Junxiong and Hooper, Coleman and Hu, Yuezhou and Tiwari, Rishabh and Wang, Jue and Singh, Harman and Wu, Qingyang and Jian, Yuqing and Zhang, Ce and Keutzer, Kurt and Dao, Tri and Wu, Xiaoxia and Athiwaratkun, Ben and Zou, James and Xu, Chenfeng},
+  year={2026}
+}</code></pre>

@@ -1,0 +1,79 @@
+<h1>Extending Operators</h1>
+
+<p>Import the registry and use <code>@registry.register("name")</code>. The name becomes the config YAML value.</p>
+
+<table>
+  <tr><th>Registry</th><th>Built-in</th><th>Config field</th></tr>
+  <tr><td><code>fitness</code></td><td>confidence, diversity</td><td><code>routing.fitness</code></td></tr>
+  <tr><td><code>selection</code></td><td>uniform, weighted</td><td><code>routing.selection</code></td></tr>
+  <tr><td><code>lite_agg</code></td><td>majority, random</td><td><code>routing.lite_method</code></td></tr>
+  <tr><td><code>update</code></td><td>replace, accumulate</td><td><code>routing.update</code></td></tr>
+  <tr><td><code>recombination</code></td><td>aggregate, synthesize</td><td><code>routing.recombination</code></td></tr>
+  <tr><td><code>evaluation</code></td><td>exact_match, none</td><td><code>routing.evaluation</code></td></tr>
+</table>
+
+<h2>Fitness</h2>
+<p>Receives per-candidate scores for a group. Returns a float.</p>
+<pre><code class="language-python">from squeeze_evolve import fitness
+
+@fitness.register("entropy")
+def entropy_fitness(scores, **kwargs):
+    p = np.array(scores) / sum(scores)
+    return float(-np.sum(p * np.log(p + 1e-10)))</code></pre>
+
+<h2>Selection</h2>
+<p>Receives <code>(candidates, k, m, **kwargs)</code>. Returns <code>(groups, indices)</code>.</p>
+<pre><code class="language-python">from squeeze_evolve import selection
+
+@selection.register("tournament")
+def tournament_select(candidates, k, m, **kwargs):
+    scores = kwargs["scores"]
+    groups, indices = [], []
+    for _ in range(m):
+        pool = random.sample(range(len(candidates)), k * 2)
+        winners = sorted(pool, key=lambda i: scores[i], reverse=True)[:k]
+        indices.append(winners)
+        groups.append([candidates[i] for i in winners])
+    return groups, indices</code></pre>
+
+<h2>Evaluation</h2>
+<p>Receives <code>(candidates, gt, **kwargs)</code>. Returns a dict. Numeric values are averaged across problems.</p>
+<pre><code class="language-python">from squeeze_evolve import evaluation
+
+@evaluation.register("math_boxed")
+def math_eval(candidates, gt, **kwargs):
+    correct = [check_boxed_equiv(c, gt) for c in candidates]
+    return {
+        "mean_acc": sum(correct) / len(correct),
+        "pass_at_k": float(any(correct)),
+        "majority_vote": float(check_boxed_equiv(majority(candidates), gt)),
+    }</code></pre>
+
+<h2>Recombination</h2>
+<pre><code class="language-python">from squeeze_evolve import recombination
+
+@recombination.register("minimal")
+def minimal_prompt(query, candidates, **kwargs):
+    if not candidates:
+        return query
+    joined = "\n".join(f"- {c}" for c in candidates)
+    return f"{query}\n\nCandidates:\n{joined}\n\nPick the best answer."</code></pre>
+
+<h2>Lite aggregation</h2>
+<pre><code class="language-python">from squeeze_evolve import lite_agg
+
+@lite_agg.register("longest")
+def pick_longest(group, **kwargs):
+    return max(group, key=len)</code></pre>
+
+<h2>Update</h2>
+<pre><code class="language-python">from squeeze_evolve import update
+
+@update.register("best_half")
+def keep_best_half(old, new, **kwargs):
+    combined = old + new
+    return combined[:len(combined) // 2]</code></pre>
+
+<h2>Loading custom operators</h2>
+<p>Either import your module in a Python config, or use <code>--include-path</code> to auto-discover <code>.py</code> files.</p>
+<pre><code class="language-bash">squeeze-evolve-client --config my.yaml --include-path custom_operators/ --input data.parquet</code></pre>

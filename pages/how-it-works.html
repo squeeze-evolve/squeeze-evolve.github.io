@@ -1,0 +1,50 @@
+<h1>How It Works</h1>
+
+<p>Squeeze Evolve runs an evolutionary loop over candidate solutions. Each loop scores, groups, and recombines candidates, routing each group to the model best suited for its difficulty. Every stage in the pipeline is a <a href="#framework">pluggable operator</a> you can customize.</p>
+
+<h2>Loop 0: Initialization</h2>
+<p>The most expensive model generates <code>N</code> candidate solutions per problem. Initialization quality is the strongest predictor of final accuracy, so this step always uses the best model available.</p>
+
+<h2>Loops 1..T: Evolution</h2>
+
+<h3>1. Score <span style="font-size:11px;color:#0a84ff;font-weight:600;margin-left:6px;">CUSTOMIZABLE</span></h3>
+<p>A <strong>fitness function</strong> computes a signal for each candidate. Built-in options:</p>
+<ul>
+  <li><strong>Group Confidence (GC)</strong> &mdash; mean of per-token confidence from log-probabilities</li>
+  <li><strong>Diversity</strong> &mdash; count of unique final answers in a group</li>
+</ul>
+<p>Register your own via <code>@fitness.register("name")</code>. See <a href="#operators">Extending Operators</a>.</p>
+
+<h3>2. Select <span style="font-size:11px;color:#0a84ff;font-weight:600;margin-left:6px;">CUSTOMIZABLE</span></h3>
+<p>A <strong>selection function</strong> groups candidates into subsets of size <code>K</code>. Built-in options:</p>
+<ul>
+  <li><strong>Uniform</strong> &mdash; random sampling without replacement</li>
+  <li><strong>Weighted</strong> &mdash; fitness-weighted sampling with configurable temperature</li>
+</ul>
+<p>Register your own via <code>@selection.register("name")</code>.</p>
+
+<h3>3. Route</h3>
+<p>Each group's fitness determines which model handles it. Thresholds are computed per-problem from configurable percentiles.</p>
+
+<table>
+  <tr><th>Fitness</th><th>Assignment</th></tr>
+  <tr><td>Low (hard)</td><td>Most expensive model</td></tr>
+  <tr><td>Medium</td><td>Mid-tier model(s)</td></tr>
+  <tr><td>High (easy)</td><td>Cheapest model</td></tr>
+  <tr><td>Full consensus</td><td>Lite aggregation (no LLM call)</td></tr>
+</table>
+
+<p>Supports any number of model tiers. See <a href="#configuration">Configuration</a> for details on N-model routing.</p>
+
+<h3>4. Recombine <span style="font-size:11px;color:#0a84ff;font-weight:600;margin-left:6px;">CUSTOMIZABLE</span></h3>
+<p>A <strong>recombination function</strong> builds the prompt sent to the assigned model. Each model receives its groups in parallel and generates one refined candidate per group. All tiers execute concurrently.</p>
+<p>Built-in: <code>aggregate</code> (task-aware), <code>synthesize</code> (minimal). Register your own via <code>@recombination.register("name")</code>.</p>
+
+<h3>5. Update <span style="font-size:11px;color:#0a84ff;font-weight:600;margin-left:6px;">CUSTOMIZABLE</span></h3>
+<p>An <strong>update function</strong> decides how new candidates merge with the population.</p>
+<ul>
+  <li><strong>Replace</strong> &mdash; new candidates become the entire population</li>
+  <li><strong>Accumulate</strong> &mdash; new candidates are appended, growing the population</li>
+</ul>
+<p>Register your own via <code>@update.register("name")</code>.</p>
+
