@@ -31,6 +31,7 @@ $$P^{(t+1)} = \Phi_f\!\left(P^{(t)}\right)$$
   <tr>
     <th>Method</th>
     <th>Loops</th>
+    <th>Pop. Size</th>
     <th>Selection</th>
     <th>Recombination</th>
     <th>Fitness Signal</th>
@@ -39,6 +40,7 @@ $$P^{(t+1)} = \Phi_f\!\left(P^{(t)}\right)$$
   <tr>
     <td><a href="https://arxiv.org/abs/2203.11171" target="_blank">Majority Voting</a></td>
     <td>1</td>
+    <td>N</td>
     <td>Answer clustering</td>
     <td>Identity</td>
     <td>Consensus frequency</td>
@@ -47,14 +49,16 @@ $$P^{(t+1)} = \Phi_f\!\left(P^{(t)}\right)$$
   <tr>
     <td><a href="https://arxiv.org/abs/2303.17651" target="_blank">Self-Refinement</a></td>
     <td>T</td>
+    <td>1</td>
     <td>Self-critique</td>
     <td>Conditioned rewrite</td>
-    <td>Natural language</td>
+    <td>Natural language critique</td>
     <td>Single</td>
   </tr>
   <tr>
     <td><a href="https://arxiv.org/abs/2502.01839" target="_blank">RSA</a></td>
     <td>T</td>
+    <td>N</td>
     <td>K-subset</td>
     <td>LLM aggregation</td>
     <td>Implicit</td>
@@ -63,6 +67,7 @@ $$P^{(t+1)} = \Phi_f\!\left(P^{(t)}\right)$$
   <tr>
     <td><a href="https://arxiv.org/abs/2506.13131" target="_blank">AlphaEvolve</a></td>
     <td>T</td>
+    <td>Variable</td>
     <td>Fitness-guided</td>
     <td>LLM aggregation</td>
     <td>External verifier</td>
@@ -71,9 +76,10 @@ $$P^{(t+1)} = \Phi_f\!\left(P^{(t)}\right)$$
   <tr>
     <td><strong>Squeeze Evolve</strong></td>
     <td>T</td>
+    <td>Variable</td>
     <td>Fitness-guided</td>
-    <td>Mixed routing</td>
-    <td>Model-intrinsic</td>
+    <td>Mix of recombination</td>
+    <td>Probabilistic fitness</td>
     <td><strong>Multi</strong></td>
   </tr>
 </table>
@@ -220,6 +226,140 @@ $$P^{(t+1)} = \Phi_f\!\left(P^{(t)}\right)$$
   <figcaption>Accuracy vs. cumulative cost for GPT-OSS-20B / GPT-5 mini (heterogeneous, open-source to proprietary). Squeeze Evolve matches the expensive target curve at 1.4&ndash;1.9x lower cost across all four benchmarks.</figcaption>
 </figure>
 
+<table>
+  <tr>
+    <th>Data</th>
+    <th>Strategy</th>
+    <th>Model 1</th>
+    <th>Model 2</th>
+    <th>Acc.</th>
+    <th>$/Prob</th>
+    <th>Savings</th>
+  </tr>
+  <tr><td colspan="7"><em>Homogeneous (open-source + open-source)</em></td></tr>
+  <tr>
+    <td rowspan="2">AIME25</td>
+    <td>RSA (target)</td>
+    <td>&mdash;</td>
+    <td>Qwen3-30B-A3B-T</td>
+    <td>89.2</td>
+    <td>$0.94</td>
+    <td>1.0x</td>
+  </tr>
+  <tr>
+    <td><strong>Squeeze Evolve</strong> (<em>p</em>=0)</td>
+    <td>Qwen3-30B-A3B-I</td>
+    <td>Qwen3-30B-A3B-T</td>
+    <td><strong>90.7</strong></td>
+    <td><strong>$0.66</strong></td>
+    <td><strong>1.4x</strong></td>
+  </tr>
+  <tr>
+    <td rowspan="2">HMMT25</td>
+    <td>RSA (target)</td>
+    <td>&mdash;</td>
+    <td>GPT-OSS-120B</td>
+    <td>89.7</td>
+    <td>$0.41</td>
+    <td>1.0x</td>
+  </tr>
+  <tr>
+    <td><strong>Squeeze Evolve</strong> (<em>p</em>=10)</td>
+    <td>GPT-OSS-20B</td>
+    <td>GPT-OSS-120B</td>
+    <td><strong>92.0</strong></td>
+    <td><strong>$0.25</strong></td>
+    <td><strong>1.6x</strong></td>
+  </tr>
+  <tr>
+    <td rowspan="2">GPQA-D</td>
+    <td>RSA (target)</td>
+    <td>&mdash;</td>
+    <td>Qwen3-30B-A3B-T</td>
+    <td>74.0</td>
+    <td>$0.57</td>
+    <td>1.0x</td>
+  </tr>
+  <tr>
+    <td><strong>Squeeze Evolve</strong> (<em>p</em>=0)</td>
+    <td>Qwen3-30B-A3B-I</td>
+    <td>Qwen3-30B-A3B-T</td>
+    <td><strong>75.9</strong></td>
+    <td><strong>$0.32</strong></td>
+    <td><strong>1.8x</strong></td>
+  </tr>
+  <tr>
+    <td rowspan="2">LCB-V6</td>
+    <td>RSA (target)</td>
+    <td>&mdash;</td>
+    <td>GPT-OSS-120B</td>
+    <td>75.9</td>
+    <td>$0.44</td>
+    <td>1.0x</td>
+  </tr>
+  <tr>
+    <td><strong>Squeeze Evolve</strong> (<em>p</em>=10)</td>
+    <td>GPT-OSS-20B</td>
+    <td>GPT-OSS-120B</td>
+    <td>75.6</td>
+    <td><strong>$0.22</strong></td>
+    <td><strong>2.0x</strong></td>
+  </tr>
+  <tr><td colspan="7"><em>Heterogeneous (open-source + closed-source)</em></td></tr>
+  <tr>
+    <td rowspan="2">AIME25</td>
+    <td>RSA (target)</td>
+    <td>&mdash;</td>
+    <td>GPT-5 mini</td>
+    <td>94.2</td>
+    <td>$0.89</td>
+    <td>1.0x</td>
+  </tr>
+  <tr>
+    <td><strong>Squeeze Evolve</strong> (<em>p</em>=30)</td>
+    <td>GPT-OSS-20B</td>
+    <td>GPT-5 mini</td>
+    <td><strong>95.4</strong></td>
+    <td><strong>$0.50</strong></td>
+    <td><strong>1.8x</strong></td>
+  </tr>
+  <tr>
+    <td rowspan="2">HMMT25</td>
+    <td>RSA (target)</td>
+    <td>&mdash;</td>
+    <td>GPT-5 mini</td>
+    <td>93.3</td>
+    <td>$0.94</td>
+    <td>1.0x</td>
+  </tr>
+  <tr>
+    <td><strong>Squeeze Evolve</strong> (<em>p</em>=30)</td>
+    <td>GPT-OSS-20B</td>
+    <td>GPT-5 mini</td>
+    <td>93.1</td>
+    <td><strong>$0.56</strong></td>
+    <td><strong>1.7x</strong></td>
+  </tr>
+  <tr>
+    <td rowspan="2">GPQA-D</td>
+    <td>RSA (target)</td>
+    <td>&mdash;</td>
+    <td>GPT-5 mini</td>
+    <td>85.0</td>
+    <td>$0.52</td>
+    <td>1.0x</td>
+  </tr>
+  <tr>
+    <td><strong>Squeeze Evolve</strong> (<em>p</em>=20)</td>
+    <td>Qwen3-30B-A3B-I</td>
+    <td>GPT-5 mini</td>
+    <td>83.6</td>
+    <td><strong>$0.35</strong></td>
+    <td><strong>1.5x</strong></td>
+  </tr>
+</table>
+<p style="font-size:12px;color:var(--t3);margin-top:4px;">Model name suffixes: <strong>-I</strong> = Instruct, <strong>-T</strong> = Thinking. Full per-percentile breakdowns in the paper appendix.</p>
+
 <p>No single pair dominates all benchmarks, confirming the model-agnostic design: practitioners select the pair that suits their task.</p>
 
 <h3>Vision</h3>
@@ -241,16 +381,16 @@ $$P^{(t+1)} = \Phi_f\!\left(P^{(t)}\right)$$
     <td>RSA (target)</td>
     <td>&mdash;</td>
     <td>Kimi-2.5-Thinking</td>
-    <td>78.6</td>
+    <td>78.58</td>
     <td>$1.04</td>
     <td>1.0x</td>
   </tr>
   <tr>
     <td><strong>MMMU-Pro</strong></td>
-    <td><strong>Squeeze Evolve</strong></td>
+    <td><strong>Squeeze Evolve</strong> (<em>p</em>=0)</td>
     <td>Qwen3.5-35B-A3B*</td>
     <td>Kimi-2.5-Thinking</td>
-    <td><strong>79.1</strong></td>
+    <td><strong>79.06</strong></td>
     <td><strong>$0.46</strong></td>
     <td><strong>2.3x</strong></td>
   </tr>
@@ -259,16 +399,16 @@ $$P^{(t+1)} = \Phi_f\!\left(P^{(t)}\right)$$
     <td>RSA (target)</td>
     <td>&mdash;</td>
     <td>Kimi-2.5-Thinking</td>
-    <td>43.2</td>
+    <td>43.23</td>
     <td>$2.05</td>
     <td>1.0x</td>
   </tr>
   <tr>
     <td><strong>BabyVision</strong></td>
-    <td><strong>Squeeze Evolve</strong></td>
+    <td><strong>Squeeze Evolve</strong> (<em>p</em>=0)</td>
     <td>Kimi-2.5-Instant</td>
     <td>Kimi-2.5-Thinking</td>
-    <td>41.6</td>
+    <td>41.56</td>
     <td><strong>$0.81</strong></td>
     <td><strong>2.5x</strong></td>
   </tr>
@@ -297,6 +437,7 @@ $$P^{(t+1)} = \Phi_f\!\left(P^{(t)}\right)$$
     <th>$/Task</th>
     <th>Savings</th>
   </tr>
+  <tr><td colspan="6"><em>External baselines</em></td></tr>
   <tr>
     <td><a href="https://imbue.com/research/arc-agi-2/" target="_blank">Imbue</a> (code exec.)</td>
     <td>&mdash;</td>
@@ -313,6 +454,7 @@ $$P^{(t+1)} = \Phi_f\!\left(P^{(t)}\right)$$
     <td>$11.77</td>
     <td>&mdash;</td>
   </tr>
+  <tr><td colspan="6"><em>Full pipeline (T=10)</em></td></tr>
   <tr>
     <td>RSA (target only)</td>
     <td>&mdash;</td>
@@ -328,6 +470,15 @@ $$P^{(t+1)} = \Phi_f\!\left(P^{(t)}\right)$$
     <td><strong>97.5</strong></td>
     <td><strong>$7.74</strong></td>
     <td><strong>3.7x</strong></td>
+  </tr>
+  <tr><td colspan="6"><em>Single recombination (T=2)</em></td></tr>
+  <tr>
+    <td><strong>Squeeze Evolve</strong></td>
+    <td>&mdash;</td>
+    <td>Gemini 3.1 Pro</td>
+    <td>94.2</td>
+    <td>$5.62</td>
+    <td>5.1x</td>
   </tr>
   <tr>
     <td><strong>Squeeze Evolve</strong></td>
@@ -353,7 +504,7 @@ $$P^{(t+1)} = \Phi_f\!\left(P^{(t)}\right)$$
   </tr>
   <tr>
     <td><a href="https://arxiv.org/abs/2509.19349" target="_blank">ShinkaEvolve</a></td>
-    <td>Ensemble (5 models)</td>
+    <td>Ensemble (Claude Sonnet-4, GPT-4.1, GPT-4.1-mini, GPT-4.1-nano, o4-mini)</td>
     <td>2.635982</td>
   </tr>
   <tr>
