@@ -275,6 +275,11 @@ $$P^{(t+1)} = \Phi_f\!\left(P^{(t)}\right)$$
 </table>
 <p style="font-size:12px;color:var(--t3);margin-top:4px;">*Model 1 operates in text-only mode (no image input after loop 0).</p>
 
+<figure class="blog-figure">
+  <img src="assets/figures/acc_vs_cost_vision_combined.png" alt="Accuracy vs. cumulative cost on MMMU-Pro for homogeneous and heterogeneous vision pairs">
+  <figcaption>Accuracy vs. cumulative cost on MMMU-Pro. Left: homogeneous pair (Kimi-2.5 Instant/Thinking) achieves 1.9x savings at matched accuracy. Right: heterogeneous pair (Qwen3.5-35B text-only / Kimi-2.5 Thinking) achieves 2.7x savings despite Model 1 never seeing any images.</figcaption>
+</figure>
+
 <p>This finding is striking: visual understanding is primarily needed at loop 0. Once the population is grounded in image content, subsequent aggregation over textual reasoning chains can be delegated to a much cheaper text-only model.</p>
 
 <h3>ARC-AGI-V2</h3>
