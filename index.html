@@ -549,6 +549,19 @@
   .collab-cta__buttons .secondary:hover { color: var(--t1); }
 
   /* ================================================================
+     Footer
+     ================================================================ */
+  .site-footer {
+    margin-left: var(--sidebar-w);
+    padding: 24px 48px;
+    border-top: 1px solid var(--b);
+    font-size: 13px; color: var(--t3);
+    text-align: center;
+  }
+  .site-footer a { color: var(--t3); text-decoration: underline; }
+  .site-footer a:hover { color: var(--t2); }
+
+  /* ================================================================
      Responsive
      ================================================================ */
   @media (max-width: 860px) {
@@ -558,6 +571,7 @@
     }
     .sidebar.open { transform: translateX(0); }
     .content { margin-left: 0; padding: calc(var(--header-h) + 24px) 20px 60px; max-width: 100%; }
+    .site-footer { margin-left: 0; padding: 20px; }
     .hamburger { display: block; }
     .home-hero h1 { font-size: 34px; }
     .home-grid { grid-template-columns: 1fr; }
@@ -599,6 +613,10 @@
 
 <main class="content" id="content"></main>
 <aside class="toc" id="toc"></aside>
+
+<footer class="site-footer">
+  &copy; 2026 Squeeze Evolve. All rights reserved. Licensed under <a href="https://github.com/squeeze-evolve/squeeze-evolve/blob/main/LICENSE" target="_blank">Apache 2.0</a>.
+</footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
