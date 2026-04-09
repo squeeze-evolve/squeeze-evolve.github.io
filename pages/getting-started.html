@@ -5,7 +5,7 @@
 
 <p>Requirements: Python 3.10+, <a href="https://docs.astral.sh/uv/" target="_blank">uv</a> (recommended) or pip, Git.</p>
 
-<pre><code class="language-bash">git clone --recurse-submodules git@github.com:Nietzsche2000/squeeze-evolve.git
+<pre><code class="language-bash">git clone --recurse-submodules git@github.com:squeeze-evolve/squeeze-evolve.git
 cd squeeze-evolve
 
 # Recommended
@@ -224,3 +224,53 @@ models:
   <tr><td><code>discover</code></td><td>```python```</td><td>Code optimization</td></tr>
   <tr><td><code>rg</code></td><td>&lt;answer&gt;...&lt;/answer&gt;</td><td>Reasoning Gym</td></tr>
 </table>
+
+<h2>Customizing operators</h2>
+
+<p>Every operator is a plain Python function registered by name. Swap any built-in with your own using a single decorator.</p>
+
+<div class="op-grid">
+  <div class="op-card op-card--clickable" onclick="navigate('operators')">
+    <div class="op-card__name">Fitness <span class="pipeline__step-tag customizable" style="font-size:10px;vertical-align:middle;">Customizable</span></div>
+    <div class="op-card__builtins"><code>confidence</code> <code>diversity</code></div>
+    <div class="op-card__desc">How group difficulty is measured. Determines routing decisions.</div>
+  </div>
+  <div class="op-card op-card--clickable" onclick="navigate('operators')">
+    <div class="op-card__name">Selection <span class="pipeline__step-tag customizable" style="font-size:10px;vertical-align:middle;">Customizable</span></div>
+    <div class="op-card__builtins"><code>uniform</code> <code>weighted</code></div>
+    <div class="op-card__desc">How candidates are grouped. Controls exploration vs exploitation.</div>
+  </div>
+  <div class="op-card op-card--clickable" onclick="navigate('operators')">
+    <div class="op-card__name">Recombination <span class="pipeline__step-tag customizable" style="font-size:10px;vertical-align:middle;">Customizable</span></div>
+    <div class="op-card__builtins"><code>aggregate</code> <code>synthesize</code></div>
+    <div class="op-card__desc">The prompt sent to models. Task-aware or fully custom.</div>
+  </div>
+  <div class="op-card op-card--clickable" onclick="navigate('operators')">
+    <div class="op-card__name">Evaluation <span class="pipeline__step-tag customizable" style="font-size:10px;vertical-align:middle;">Customizable</span></div>
+    <div class="op-card__builtins"><code>exact_match</code> <code>none</code></div>
+    <div class="op-card__desc">How accuracy is measured. Add domain-specific metrics.</div>
+  </div>
+  <div class="op-card op-card--clickable" onclick="navigate('operators')">
+    <div class="op-card__name">Update <span class="pipeline__step-tag customizable" style="font-size:10px;vertical-align:middle;">Customizable</span></div>
+    <div class="op-card__builtins"><code>replace</code> <code>accumulate</code></div>
+    <div class="op-card__desc">How the population evolves. Replace, accumulate, or filter.</div>
+  </div>
+  <div class="op-card op-card--clickable" onclick="navigate('operators')">
+    <div class="op-card__name">Lite Aggregation <span class="pipeline__step-tag customizable" style="font-size:10px;vertical-align:middle;">Customizable</span></div>
+    <div class="op-card__builtins"><code>majority</code> <code>random</code></div>
+    <div class="op-card__desc">Zero-cost aggregation for high-consensus groups.</div>
+  </div>
+</div>
+
+<h3>Register a custom operator in 4 lines</h3>
+<pre><code class="language-python">from squeeze_evolve import fitness
+
+@fitness.register("entropy")
+def entropy_fitness(scores, **kwargs):
+    p = np.array(scores) / sum(scores)
+    return float(-np.sum(p * np.log(p + 1e-10)))</code></pre>
+<pre><code class="language-yaml"># Then use it in your config
+routing:
+  fitness: entropy</code></pre>
+
+<p>See <a href="#operators">Extending Operators</a> for the full reference on all six operator families.</p>

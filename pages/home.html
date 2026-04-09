@@ -27,87 +27,62 @@
   </div>
 </div>
 
+<div class="logos-bar">
+  <div class="logos-bar__label">Built by researchers at</div>
+  <div class="logos-bar__row">
+    <a class="logos-bar__item" href="https://www.berkeley.edu" target="_blank">
+      <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Seal_of_University_of_California%2C_Berkeley.svg/200px-Seal_of_University_of_California%2C_Berkeley.svg.png" alt="UC Berkeley">
+      UC Berkeley
+    </a>
+    <a class="logos-bar__item" href="https://www.utexas.edu" target="_blank">
+      <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8d/Texas_Longhorns_logo.svg/200px-Texas_Longhorns_logo.svg.png" alt="UT Austin">
+      UT Austin
+    </a>
+    <a class="logos-bar__item" href="https://www.stanford.edu" target="_blank">
+      <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b5/Seal_of_Leland_Stanford_Junior_University.svg/200px-Seal_of_Leland_Stanford_Junior_University.svg.png" alt="Stanford">
+      Stanford
+    </a>
+    <a class="logos-bar__item" href="https://www.princeton.edu" target="_blank">
+      <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d0/Princeton_seal.svg/200px-Princeton_seal.svg.png" alt="Princeton">
+      Princeton
+    </a>
+    <a class="logos-bar__item" href="https://www.together.ai" target="_blank">
+      <img src="assets/figures/togetherailogo.png" alt="Together AI">
+      Together AI
+    </a>
+  </div>
+</div>
+
 <div class="pipeline">
   <div class="pipeline__label">The evolutionary loop</div>
   <div class="pipeline__steps">
-    <div class="pipeline__step">
+    <div class="pipeline__step pipeline__step--clickable" onclick="navigate('operators')">
       <div class="pipeline__step-name">Score</div>
       <div class="pipeline__step-desc">Confidence from token logprobs</div>
       <div class="pipeline__step-tag customizable">Customizable</div>
     </div>
-    <div class="pipeline__step">
+    <div class="pipeline__step pipeline__step--clickable" onclick="navigate('operators')">
       <div class="pipeline__step-name">Select</div>
       <div class="pipeline__step-desc">Group candidates into subsets</div>
       <div class="pipeline__step-tag customizable">Customizable</div>
     </div>
     <div class="pipeline__step">
       <div class="pipeline__step-name">Route</div>
-      <div class="pipeline__step-desc">Hard groups → strong model</div>
+      <div class="pipeline__step-desc">Hard groups &rarr; strong model</div>
       <div class="pipeline__step-tag builtin">Built-in</div>
     </div>
-    <div class="pipeline__step">
+    <div class="pipeline__step pipeline__step--clickable" onclick="navigate('operators')">
       <div class="pipeline__step-name">Recombine</div>
       <div class="pipeline__step-desc">Generate refined candidates</div>
       <div class="pipeline__step-tag customizable">Customizable</div>
     </div>
-    <div class="pipeline__step">
+    <div class="pipeline__step pipeline__step--clickable" onclick="navigate('operators')">
       <div class="pipeline__step-name">Update</div>
       <div class="pipeline__step-desc">Merge into population</div>
       <div class="pipeline__step-tag customizable">Customizable</div>
     </div>
   </div>
-</div>
-
-<div class="home-section">
-  <div class="home-section__label">Modular by design</div>
-  <div class="home-section__title">Six pluggable operator families</div>
-  <div class="home-section__desc">Every operator is a plain Python function registered by name. Swap any built-in with your own using a single decorator.</div>
-</div>
-
-<div class="op-grid">
-  <div class="op-card">
-    <div class="op-card__name">Fitness</div>
-    <div class="op-card__builtins"><code>confidence</code> <code>diversity</code></div>
-    <div class="op-card__desc">How group difficulty is measured. Determines routing decisions.</div>
-  </div>
-  <div class="op-card">
-    <div class="op-card__name">Selection</div>
-    <div class="op-card__builtins"><code>uniform</code> <code>weighted</code></div>
-    <div class="op-card__desc">How candidates are grouped. Controls exploration vs exploitation.</div>
-  </div>
-  <div class="op-card">
-    <div class="op-card__name">Recombination</div>
-    <div class="op-card__builtins"><code>aggregate</code> <code>synthesize</code></div>
-    <div class="op-card__desc">The prompt sent to models. Task-aware or fully custom.</div>
-  </div>
-  <div class="op-card">
-    <div class="op-card__name">Evaluation</div>
-    <div class="op-card__builtins"><code>exact_match</code> <code>none</code></div>
-    <div class="op-card__desc">How accuracy is measured. Add domain-specific metrics.</div>
-  </div>
-  <div class="op-card">
-    <div class="op-card__name">Update</div>
-    <div class="op-card__builtins"><code>replace</code> <code>accumulate</code></div>
-    <div class="op-card__desc">How the population evolves. Replace, accumulate, or filter.</div>
-  </div>
-  <div class="op-card">
-    <div class="op-card__name">Lite Aggregation</div>
-    <div class="op-card__builtins"><code>majority</code> <code>random</code></div>
-    <div class="op-card__desc">Zero-cost aggregation for high-consensus groups.</div>
-  </div>
-</div>
-
-<div class="home-code">
-  <div class="home-code__label">Register a custom operator in 4 lines</div>
-  <pre><code class="language-python">from squeeze_evolve import fitness
-
-@fitness.register("entropy")
-def entropy_fitness(scores, **kwargs):
-    p = np.array(scores) / sum(scores)
-    return float(-np.sum(p * np.log(p + 1e-10)))</code></pre>
-  <pre><code class="language-yaml"># Then use it in your config
-routing:
-  fitness: entropy</code></pre>
+  <p style="text-align:center; font-size:13px; color:var(--t3); margin-top:10px;">Every operator is swappable. Click any <span style="color:var(--a);">Customizable</span> step to learn how.</p>
 </div>
 
 <div class="home-section">
@@ -121,6 +96,10 @@ routing:
   <div class="blog-card__desc">How adaptive multi-model routing achieves 3.3x cost savings and 10x throughput gains across math, coding, science, and discovery benchmarks, without any verifiers.</div>
   <div class="blog-card__date">April 2026</div>
 </a>
+
+<div class="collab-cta">
+  <div class="collab-cta__desc">Open source and open to contributions. <a href="https://github.com/squeeze-evolve/squeeze-evolve" target="_blank">GitHub</a> &middot; <a href="https://github.com/squeeze-evolve/squeeze-evolve/issues" target="_blank">Issues</a> &middot; <a href="mailto:monishwaran@berkeley.edu">Contact</a></div>
+</div>
 
 <div class="home-section">
   <div class="home-section__label">Documentation</div>
