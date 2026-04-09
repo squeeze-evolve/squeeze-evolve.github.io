@@ -143,8 +143,6 @@
   .content > .home-hero,
   .content > .pipeline,
   .content > .home-section,
-  .content > .op-grid,
-  .content > .home-code,
   .content > .home-grid,
   .content > .stats,
   .content > .insight-grid,
@@ -197,9 +195,20 @@
 
   /* Code blocks */
   .content pre {
+    position: relative;
     background: var(--s1) !important; border: 1px solid var(--b);
     border-radius: var(--r); overflow-x: auto;
   }
+  .copy-btn {
+    position: absolute; top: 6px; right: 6px;
+    background: var(--s2); border: 1px solid var(--b2); border-radius: var(--r2);
+    color: var(--t3); font-size: 12px; padding: 3px 8px;
+    cursor: pointer; opacity: 0; transition: opacity 0.15s;
+    font-family: inherit; line-height: 1.4;
+  }
+  .content pre:hover .copy-btn { opacity: 1; }
+  .copy-btn:hover { color: var(--t1); }
+  .copy-btn.copied { color: var(--green); }
   .content pre code {
     display: block; padding: 14px 16px; border: none; border-radius: 0;
     font-size: 13.5px; line-height: 1.55; color: var(--t2);
@@ -711,6 +720,24 @@ window.addEventListener('scroll', () => {
   });
 });
 
+function addCopyButtons() {
+  document.querySelectorAll('#content pre').forEach(pre => {
+    if (pre.querySelector('.copy-btn')) return;
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.textContent = 'Copy';
+    btn.addEventListener('click', () => {
+      const code = pre.querySelector('code');
+      navigator.clipboard.writeText(code.innerText).then(() => {
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+      });
+    });
+    pre.appendChild(btn);
+  });
+}
+
 async function navigate(page) {
   window.location.hash = page === 'home' ? '' : page;
   document.querySelectorAll('.nav-link').forEach(l =>
@@ -724,6 +751,7 @@ async function navigate(page) {
   }
   document.getElementById('content').innerHTML = cache[page];
   document.querySelectorAll('#content pre code').forEach(el => hljs.highlightElement(el));
+  addCopyButtons();
   if (window.renderMathInElement) {
     renderMathInElement(document.getElementById('content'), {
       delimiters: [
