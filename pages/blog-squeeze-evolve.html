@@ -14,7 +14,7 @@
 
 <!-- ------------------------------------------------------------ -->
 
-<h2>One Framework for Many Methods</h2>
+<h2 id="sec-framework">One Framework for Many Methods</h2>
 
 <p>The test-time scaling landscape looks fragmented. <a href="https://arxiv.org/abs/2203.11171" target="_blank">Majority voting</a>, <a href="https://arxiv.org/abs/2303.17651" target="_blank">self-refinement</a>, <a href="https://arxiv.org/abs/2502.01839" target="_blank">recursive self-aggregation (RSA)</a>, <a href="https://arxiv.org/abs/2506.13131" target="_blank">AlphaEvolve</a>: each has its own paper, its own codebase, its own framing. But when you step back, they share a common skeleton.</p>
 
@@ -178,7 +178,7 @@ $$P^{(t+1)} = \Phi_f\!\left(P^{(t)}\right)$$
 
 <!-- ------------------------------------------------------------ -->
 
-<h2>Results Across Eight Benchmarks</h2>
+<h2 id="sec-results">Results Across Eight Benchmarks</h2>
 
 <div class="results-grid">
   <div class="rstat">
@@ -362,7 +362,7 @@ $$P^{(t+1)} = \Phi_f\!\left(P^{(t)}\right)$$
 
 <p>No single pair dominates all benchmarks, confirming the model-agnostic design: practitioners select the pair that suits their task.</p>
 
-<h3>Vision</h3>
+<h3 id="sec-vision">Vision</h3>
 
 <p>On MMMU-Pro and BabyVision, same-family pairs (Kimi-2.5 Instant/Thinking) achieve 1.8&ndash;2.5x savings. A cross-family pair (Qwen3.5-35B + Kimi-2.5 Thinking) surpasses the expensive model on MMMU-Pro (79.1% vs. 78.6%) at 2.3x savings, <em>even though the draft model never sees any images after initialization</em>.</p>
 
@@ -422,7 +422,7 @@ $$P^{(t+1)} = \Phi_f\!\left(P^{(t)}\right)$$
 
 <p>This finding is striking: visual understanding is primarily needed at loop 0. Once the population is grounded in image content, subsequent aggregation over textual reasoning chains can be delegated to a much cheaper text-only model.</p>
 
-<h3>ARC-AGI-V2</h3>
+<h3 id="sec-arc-agi">ARC-AGI-V2</h3>
 
 <p>Since the Gemini API does not expose logprobs, we use answer diversity as the fitness signal. Groups with non-zero diversity are recombined by Gemini 3.1 Pro; consensus groups fall back to majority vote. With this routing, Squeeze Evolve achieves <strong>97.5% at $7.74/task</strong>, a 3.7x savings over the RSA baseline.</p>
 
@@ -528,7 +528,7 @@ $$P^{(t+1)} = \Phi_f\!\left(P^{(t)}\right)$$
 
 <!-- ------------------------------------------------------------ -->
 
-<h2>System-Level Gains</h2>
+<h2 id="sec-system">System-Level Gains</h2>
 
 <p>Cost savings on API pricing are only part of the story. When deployed on self-hosted infrastructure, Squeeze Evolve also delivers substantial system-level improvements.</p>
 

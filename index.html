@@ -114,17 +114,19 @@
   .sidebar::-webkit-scrollbar { width: 4px; }
   .sidebar::-webkit-scrollbar-thumb { background: var(--s2); border-radius: 2px; }
 
-  .nav-section { margin-bottom: 20px; }
+  .nav-section { margin-bottom: 22px; }
   .nav-section__title {
-    font-size: 12px; font-weight: 600; color: var(--t3); text-transform: uppercase;
-    letter-spacing: 0.5px; padding: 0 20px; margin-bottom: 2px;
+    font-size: 11px; font-weight: 700; color: var(--t1); text-transform: uppercase;
+    letter-spacing: 0.6px; padding: 0 20px; margin-bottom: 6px;
+    opacity: 0.5;
   }
   .nav-link {
-    display: block; font-size: 14px; color: var(--t3); padding: 4px 20px;
-    transition: color 0.12s; cursor: pointer; line-height: 1.4;
+    display: block; font-size: 14px; color: var(--t3); padding: 5px 20px 5px 28px;
+    transition: color 0.12s, border-color 0.12s; cursor: pointer; line-height: 1.4;
+    border-left: 2px solid transparent;
   }
   .nav-link:hover { color: var(--t2); }
-  .nav-link.active { color: var(--t1); font-weight: 500; }
+  .nav-link.active { color: var(--t1); font-weight: 500; border-left-color: var(--a); }
 
   /* ================================================================
      Content — article pages
@@ -377,7 +379,8 @@
     border: 1px solid var(--b); border-radius: var(--r);
     overflow: hidden; margin-top: 16px;
   }
-  .stat { flex: 1; background: var(--bg); padding: 16px; text-align: center; }
+  .stat { flex: 1; background: var(--bg); padding: 16px; text-align: center; cursor: pointer; transition: background 0.15s; }
+  .stat:hover { background: var(--s1); }
   .stat__value { font-size: 28px; font-weight: 700; color: var(--t1); letter-spacing: -0.5px; }
   .stat__label { font-size: 12px; color: var(--t3); margin-top: 2px; }
 
@@ -690,7 +693,7 @@ function buildToc(page) {
 
   let html = '<div class="toc__title">On this page</div>';
   headings.forEach((h, i) => {
-    const id = 'toc-' + i;
+    const id = h.id || ('toc-' + i);
     h.id = id;
     const cls = h.tagName === 'H3' ? ' class="toc-h3"' : '';
     html += '<a href="#' + id + '"' + cls + ' data-toc="' + id + '">' + h.textContent + '</a>';
@@ -719,6 +722,14 @@ window.addEventListener('scroll', () => {
     links.forEach(a => a.classList.toggle('active', a === active));
   });
 });
+
+async function navigateToSection(page, sectionId) {
+  await navigate(page);
+  setTimeout(() => {
+    const el = document.getElementById(sectionId);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 100);
+}
 
 function addCopyButtons() {
   document.querySelectorAll('#content pre').forEach(pre => {
