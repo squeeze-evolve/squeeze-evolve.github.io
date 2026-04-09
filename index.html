@@ -516,10 +516,14 @@
   }
   .logos-bar__item:hover { color: var(--t1); }
   .logos-bar__item img {
-    height: 28px; width: auto;
+    height: 32px; width: 32px;
+    background: rgba(255,255,255,0.9);
+    border-radius: 6px;
+    padding: 3px;
+    object-fit: contain;
   }
   [data-theme="light"] .logos-bar__item img {
-    filter: brightness(0.2);
+    background: none; padding: 0;
   }
 
   /* ================================================================
