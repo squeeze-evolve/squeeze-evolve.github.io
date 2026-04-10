@@ -15,9 +15,13 @@ Test-time scaling lets language models produce many candidate answers and iterat
 ### Citation
 
 ```bibtex
-@article{maheswaran2026squeezeevolve,
-  title={Squeeze Evolve: Unified Multi-Model Orchestration Framework for Verifier-Free Evolution},
-  author={Maheswaran, Monishwaran and Lakhani, Leon and Zhou, Zhongzhu and Yang, Shijia and Wang, Junxiong and Hooper, Coleman and Hu, Yuezhou and Tiwari, Rishabh and Wang, Jue and Singh, Harman and Wu, Qingyang and Jian, Yuqing and Zhang, Ce and Keutzer, Kurt and Dao, Tri and Wu, Xiaoxia and Athiwaratkun, Ben and Zou, James and Xu, Chenfeng},
-  year={2026}
+@misc{maheswaran2026squeezeevolveunifiedmultimodel,
+      title={Squeeze Evolve: Unified Multi-Model Orchestration for Verifier-Free Evolution}, 
+      author={Monishwaran Maheswaran and Leon Lakhani and Zhongzhu Zhou and Shijia Yang and Junxiong Wang and Coleman Hooper and Yuezhou Hu and Rishabh Tiwari and Jue Wang and Harman Singh and Qingyang Wu and Yuqing Jian and Ce Zhang and Kurt Keutzer and Tri Dao and Xiaoxia Wu and Ben Athiwaratkun and James Zou and Chenfeng Xu},
+      year={2026},
+      eprint={2604.07725},
+      archivePrefix={arXiv},
+      primaryClass={cs.AI},
+      url={https://arxiv.org/abs/2604.07725}, 
 }
 ```
